@@ -1,0 +1,7 @@
+{
+  "version": "v1",
+  "category": "Ambiguous instruction",
+  "description": "Baseline: minimal summarisation prompt with no format, length, or audience constraints.",
+  "rationale": "Starting point — demonstrates what happens without constraints.",
+  "failure_mode": "Uncontrolled response length and style; model decides format, audience, and depth independently."
+}

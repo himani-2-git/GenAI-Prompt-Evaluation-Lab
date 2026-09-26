@@ -1,0 +1,7 @@
+{
+  "version": "v1",
+  "category": "Structured JSON output",
+  "description": "Baseline: asks for JSON without a schema.",
+  "rationale": "Starting point — demonstrates inconsistent JSON output without schema constraints.",
+  "failure_mode": "Model may wrap output in ```json fences, use inconsistent field names, or add prose before/after the JSON."
+}

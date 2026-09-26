@@ -1,0 +1,3 @@
+Summarise the following article in exactly three bullet points for a non-technical reader. Avoid all technical jargon. Each bullet must be one sentence.
+
+{context}

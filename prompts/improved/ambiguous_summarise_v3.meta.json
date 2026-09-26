@@ -1,0 +1,7 @@
+{
+  "version": "v3",
+  "category": "Ambiguous instruction",
+  "description": "Adds anti-jargon constraint and per-bullet sentence limit.",
+  "rationale": "Added 'avoid all technical jargon' and 'each bullet must be one sentence' to further tighten the output.",
+  "failure_mode": "Highly constrained prompts can produce stilted prose."
+}

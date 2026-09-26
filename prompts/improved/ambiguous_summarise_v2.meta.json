@@ -1,0 +1,7 @@
+{
+  "version": "v2",
+  "category": "Ambiguous instruction",
+  "description": "Adds explicit format, length, and audience constraints.",
+  "rationale": "Added explicit format (bullet points), length constraint (three), and audience specification (non-technical reader).",
+  "failure_mode": "May still include jargon if the article is highly technical."
+}
