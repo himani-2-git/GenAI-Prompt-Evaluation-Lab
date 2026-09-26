@@ -1,0 +1,12 @@
+# ─── Core Application ─────────────────────────────────────────────────────────
+streamlit>=1.39.0
+google-generativeai>=0.8.0
+python-dotenv>=1.0.0
+pandas>=2.2.0
+
+# ─── Testing ──────────────────────────────────────────────────────────────────
+pytest>=8.0.0
+pytest-mock>=3.14.0
+
+# ─── Utilities ────────────────────────────────────────────────────────────────
+# (All others are Python standard library: json, csv, datetime, pathlib, etc.)
