@@ -4,6 +4,8 @@ An interactive laboratory for designing, testing, evaluating, and iterating on
 prompts for large language models — built as a portfolio project demonstrating
 systematic prompt engineering practice.
 
+> 💡 **Quick Reference:** Looking for copy-paste commands to run and test? See the [**Beginner's Quickstart Guide**](QUICKSTART.md).
+
 ---
 
 ## Project Overview
@@ -242,8 +244,11 @@ See [`.env.example`](.env.example) for the template.
 
 ```bash
 # Activate your virtual environment first
-streamlit run app.py
+python -m streamlit run app.py
 ```
+
+> **Windows note:** Use `python -m streamlit run app.py` instead of `streamlit run app.py`.
+> This bypasses Application Control policies that sometimes block `streamlit.exe`.
 
 The app opens at `http://localhost:8501`.
 
