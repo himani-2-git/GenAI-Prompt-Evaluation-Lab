@@ -71,6 +71,7 @@ PAGE = st.sidebar.radio(
     "Navigate",
     [
         "🚀 Run Experiment",
+        "✏️ Custom Prompt",
         "📊 Compare Outputs",
         "🔍 Evaluate",
         "⚠️ Failure Log",
@@ -262,6 +263,198 @@ if PAGE == "🚀 Run Experiment":
                     )
                 else:
                     st.error(f"Error: {r['error']}")
+
+
+# ═════════════════════════════════════════════════════════════════════════════
+# PAGE 1b: Custom Prompt  ← NEW
+# ═════════════════════════════════════════════════════════════════════════════
+elif PAGE == "✏️ Custom Prompt":
+    st.title("✏️ Custom Prompt Tester")
+    st.markdown(
+        "Type **your own prompts** and run them directly against the Gemini API. "
+        "Compare two versions side by side to see which one works better."
+    )
+    st.info(
+        "💡 **How to use:** Write a task in the box below. Try two different ways "
+        "of asking the same thing. Click Run and see which answer is better."
+    )
+
+    col_left, col_right = st.columns([2, 1])
+
+    with col_right:
+        st.markdown("### ⚙️ Model Parameters")
+        cp_model = st.selectbox(
+            "Model",
+            list(SUPPORTED_MODELS.keys()),
+            format_func=lambda m: SUPPORTED_MODELS[m],
+            key="cp_model",
+        )
+        cp_temperature = st.slider(
+            "Temperature",
+            min_value=0.0, max_value=2.0, value=0.7, step=0.05,
+            help="0 = consistent/predictable. Higher = more creative/random.",
+            key="cp_temp",
+        )
+        cp_max_tokens = st.slider(
+            "Max Output Tokens",
+            min_value=128, max_value=2048, value=1024, step=128,
+            key="cp_tokens",
+        )
+        cp_system = st.text_area(
+            "System Instruction (optional)",
+            placeholder="e.g. You are a helpful assistant that always responds in simple English.",
+            height=80,
+            key="cp_system",
+        )
+
+    with col_left:
+        st.markdown("### 📝 Your Prompts")
+        st.markdown(
+            "Write the **same task** in two different ways. "
+            "The difference in how you phrase it changes the AI's response."
+        )
+
+        st.markdown("**Prompt V1** — your first attempt (can be simple/vague):")
+        cp_prompt_v1 = st.text_area(
+            "Prompt V1",
+            placeholder='e.g. "Summarise this article."',
+            height=120,
+            label_visibility="collapsed",
+            key="cp_v1",
+        )
+
+        st.markdown("**Prompt V2** — your improved version (more specific):")
+        cp_prompt_v2 = st.text_area(
+            "Prompt V2",
+            placeholder='e.g. "Summarise this article in exactly 3 bullet points. '
+                        'Use simple English. Audience is a 15-year-old."',
+            height=120,
+            label_visibility="collapsed",
+            key="cp_v2",
+        )
+
+        st.markdown("**Context / Input** (optional — paste article, text, data here):")
+        cp_context = st.text_area(
+            "Context",
+            placeholder="Paste any article, paragraph, or data you want the AI to work with...",
+            height=150,
+            label_visibility="collapsed",
+            key="cp_context",
+        )
+
+        # Build final prompts (substitute {context} if present)
+        def build_prompt(template: str, context: str) -> str:
+            if context.strip():
+                if "{context}" in template:
+                    return template.replace("{context}", context.strip())
+                return template.strip() + "\n\n" + context.strip()
+            return template.strip()
+
+        run_v1 = bool(cp_prompt_v1.strip())
+        run_v2 = bool(cp_prompt_v2.strip())
+
+        if not run_v1:
+            st.warning("Write at least a V1 prompt to run an experiment.")
+
+        if st.button("▶️ Run My Prompts", type="primary", disabled=not run_v1):
+            client = GeminiClient(api_key=api_key, model=cp_model)
+            if not client.is_configured():
+                st.error("No API key found. Add GEMINI_API_KEY to your .env file.")
+                st.stop()
+
+            prompts_to_run = []
+            if run_v1:
+                prompts_to_run.append(("v1", build_prompt(cp_prompt_v1, cp_context)))
+            if run_v2:
+                prompts_to_run.append(("v2", build_prompt(cp_prompt_v2, cp_context)))
+
+            st.session_state["cp_results"] = []
+            progress = st.progress(0, text="Running prompts...")
+
+            for i, (label, prompt_text) in enumerate(prompts_to_run):
+                with st.spinner(f"Calling Gemini for {label.upper()}..."):
+                    result = client.generate(
+                        prompt_text,
+                        temperature=cp_temperature,
+                        max_tokens=cp_max_tokens,
+                        system_instruction=cp_system,
+                    )
+                    result["prompt_version"] = label
+                    result["prompt"] = prompt_text
+                    st.session_state["cp_results"].append(result)
+                progress.progress((i + 1) / len(prompts_to_run))
+
+            progress.empty()
+            st.success(f"✅ Done! Ran {len(prompts_to_run)} prompt(s).")
+
+    # ── Show results ───────────────────────────────────────────────────────
+    if "cp_results" in st.session_state and st.session_state["cp_results"]:
+        st.divider()
+        st.markdown("## 📄 Results")
+
+        results = st.session_state["cp_results"]
+
+        if len(results) == 2 and results[0]["success"] and results[1]["success"]:
+            # Side-by-side comparison
+            col_v1, col_v2 = st.columns(2)
+            for col, r in zip([col_v1, col_v2], results):
+                with col:
+                    label = r["prompt_version"].upper()
+                    st.markdown(f"### Prompt {label}")
+                    if r["success"]:
+                        st.markdown(r["text"])
+                        st.caption(
+                            f"⏱ {r.get('latency_ms', 0):.0f}ms  |  "
+                            f"🪙 {r.get('total_tokens', 'N/A')} tokens  |  "
+                            f"Finish: {r.get('finish_reason', '?')}"
+                        )
+                    else:
+                        st.error(r["error"])
+
+            # Quick comparison table
+            st.divider()
+            st.markdown("### 📊 Quick Comparison")
+            import pandas as pd
+            r1, r2 = results
+            comparison = {
+                "Metric": ["Word count", "Character count", "Latency (ms)", "Total tokens", "Finish reason"],
+                "V1": [
+                    len(r1["text"].split()) if r1["success"] else "—",
+                    len(r1["text"]) if r1["success"] else "—",
+                    f"{r1.get('latency_ms', 0):.0f}",
+                    r1.get("total_tokens", "N/A"),
+                    r1.get("finish_reason", "?"),
+                ],
+                "V2": [
+                    len(r2["text"].split()) if r2["success"] else "—",
+                    len(r2["text"]) if r2["success"] else "—",
+                    f"{r2.get('latency_ms', 0):.0f}",
+                    r2.get("total_tokens", "N/A"),
+                    r2.get("finish_reason", "?"),
+                ],
+            }
+            st.table(pd.DataFrame(comparison))
+
+        else:
+            # Single result or one failed
+            for r in results:
+                label = r["prompt_version"].upper()
+                with st.expander(f"Prompt {label} — {'✅ Success' if r['success'] else '❌ Failed'}", expanded=True):
+                    if r["success"]:
+                        st.markdown(r["text"])
+                        st.caption(
+                            f"⏱ {r.get('latency_ms', 0):.0f}ms  |  "
+                            f"🪙 {r.get('total_tokens', 'N/A')} tokens  |  "
+                            f"Finish: {r.get('finish_reason', '?')}"
+                        )
+                    else:
+                        st.error(r["error"])
+
+        # ── Prompt inspection ─────────────────────────────────────────────
+        with st.expander("🔍 See the exact prompts that were sent to the AI"):
+            for r in results:
+                st.markdown(f"**{r['prompt_version'].upper()}:**")
+                st.code(r["prompt"], language=None)
 
 
 # ═════════════════════════════════════════════════════════════════════════════
