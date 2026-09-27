@@ -281,7 +281,7 @@ Each test case includes:
 
 5. **Jaccard similarity** — `|intersection| / |union|` of two sets. Used here for keyword overlap between response and reference answer. Fast and deterministic but not semantic.
 
-The repository also contains [evaluation_methodology.md](docs/evaluation_methodology.md) and [failure_analysis.md](docs/failure_analysis.md). These are currently placeholder files; the methodology and failure-analysis explanation are included above.
+For comprehensive deep dives, see the dedicated guides in [`docs/evaluation_methodology.md`](docs/evaluation_methodology.md) (detailed metric definitions and limitations) and [`docs/failure_analysis.md`](docs/failure_analysis.md) (failure taxonomy, template, and worked examples).
 
 ## 🚀 Quick Start
 
@@ -357,8 +357,8 @@ GenAI-Prompt-Evaluation-Lab/
 │   ├── test_llm_client.py         # Mocked API success/error tests
 │   └── test_api_connection.py     # Manual API connection check
 └── docs/
-    ├── evaluation_methodology.md  # Existing documentation placeholder
-    ├── failure_analysis.md        # Existing documentation placeholder
+    ├── evaluation_methodology.md  # Detailed metric breakdown and honesty contract
+    ├── failure_analysis.md        # Failure taxonomy and worked case studies
     └── screenshots/
         ├── 01_hero.png
         ├── 02_run_experiment.png
