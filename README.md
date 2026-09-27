@@ -1,8 +1,34 @@
 # GenAI Prompt Evaluation Lab
 
-An interactive laboratory for designing, testing, evaluating, and iterating on
-prompts for large language models — built as a portfolio project demonstrating
-systematic prompt engineering practice.
+> An interactive laboratory for designing, testing, evaluating, and iterating on
+> prompts for large language models — built as a portfolio project demonstrating
+> systematic prompt engineering practice.
+
+![Python](https://img.shields.io/badge/Python-3.10%2B-blue?logo=python&logoColor=white)
+![Streamlit](https://img.shields.io/badge/Streamlit-1.39%2B-FF4B4B?logo=streamlit&logoColor=white)
+![Gemini](https://img.shields.io/badge/Gemini%20API-Flash%20Latest-4285F4?logo=google&logoColor=white)
+![Tests](https://img.shields.io/badge/Tests-117%20passed-brightgreen?logo=pytest&logoColor=white)
+![License](https://img.shields.io/badge/License-MIT-yellow)
+
+---
+
+## 🎬 Demo
+
+<!-- After recording, replace this block with your actual GIF:
+     1. Record with ScreenToGif (screentogif.com)
+     2. Save as docs/demo.gif
+     3. Replace the line below with: ![Demo](docs/demo.gif)
+-->
+
+> 📹 **[Watch full demo on Loom](https://loom.com)** ← replace with your Loom link
+
+**Custom Prompt Tester — V1 vs V2 side by side:**
+
+![Demo Placeholder](https://placehold.co/800x400?text=Add+your+demo.gif+here)
+
+*V1 (vague): 261 words, MAX_TOKENS (cut off) · V2 (specific): 51 words, STOP (complete) · Same AI, same question.*
+
+---
 
 > 💡 **Quick Reference:** Looking for copy-paste commands to run and test? See the [**Beginner's Quickstart Guide**](QUICKSTART.md).
 
