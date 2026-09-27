@@ -1,96 +1,122 @@
 # GenAI Prompt Evaluation Lab
 
-> An interactive laboratory for designing, testing, evaluating, and iterating on
-> prompts for large language models — built as a portfolio project demonstrating
-> systematic prompt engineering practice.
+A Python and Streamlit dashboard for comparing Gemini prompts, measuring their outputs, and documenting what changed and why.
 
 ![Python](https://img.shields.io/badge/Python-3.10%2B-blue?logo=python&logoColor=white)
 ![Streamlit](https://img.shields.io/badge/Streamlit-1.39%2B-FF4B4B?logo=streamlit&logoColor=white)
-![Gemini](https://img.shields.io/badge/Gemini%20API-Flash%20Latest-4285F4?logo=google&logoColor=white)
-![Tests](https://img.shields.io/badge/Tests-117%20passed-brightgreen?logo=pytest&logoColor=white)
-![License](https://img.shields.io/badge/License-MIT-yellow)
-
----
+![Gemini API](https://img.shields.io/badge/Gemini%20API-google--genai-4285F4?logo=google&logoColor=white)
+![Tests: 117 passed](https://img.shields.io/badge/Tests-117%20passed-brightgreen?logo=pytest&logoColor=white)
+![MIT License](https://img.shields.io/badge/License-MIT-yellow)
 
 ## 🎬 Demo
 
-<!-- After recording, replace this block with your actual GIF:
-     1. Record with ScreenToGif (screentogif.com)
-     2. Save as docs/demo.gif
-     3. Replace the line below with: ![Demo](docs/demo.gif)
--->
+<img src="docs/screenshots/01_hero.png" width="700" alt="Custom Prompt results with a long V1 answer beside a complete three-sentence V2 answer"/>
 
-> 📹 **[Watch full demo on Loom](https://loom.com)** ← replace with your Loom link
+*Custom Prompt in action: the opening of V1's long black-hole explanation sits beside the complete V2 response. Comparing actual outputs makes the effect of length and audience instructions visible.*
 
-**Custom Prompt Tester — V1 vs V2 side by side:**
+The screenshots show real API responses, captured on 27 September 2026. The final black-hole capture uses `gemini-flash-lite-latest`, temperature `0.7`, and a `1024` max-output-token setting. Flash Latest returned temporary high-demand errors, and Gemini 2.5 Flash was unavailable to this account during capture; the app's existing Flash Lite option succeeded. The default model in the code remains `gemini-flash-latest`.
 
-![Demo Placeholder](https://placehold.co/800x400?text=Add+your+demo.gif+here)
+For copy-paste setup help, see [QUICKSTART.md](QUICKSTART.md).
 
-*V1 (vague): 261 words, MAX_TOKENS (cut off) · V2 (specific): 51 words, STOP (complete) · Same AI, same question.*
+## ✨ What This Project Does
 
----
+Write a vague prompt and a more specific version, send both to Google Gemini, and compare the actual answers. The dashboard measures response length, token usage, latency, and finish reason, while labelling quality checks by the method used. Eight preset cases support a workflow of running, evaluating, revising, and documenting prompts; their results are saved locally and can be exported to CSV. A failure log records what went wrong, the likely root cause, and the proposed fix so prompt changes have a documented rationale.
 
-> 💡 **Quick Reference:** Looking for copy-paste commands to run and test? See the [**Beginner's Quickstart Guide**](QUICKSTART.md).
+## 🧪 The Core Experiment
 
----
+**V1 — vague**
 
-## Project Overview
-
-This project provides a structured workflow for prompt engineering:
-
-```
-Design a prompt
-    ↓
-Run it against a real LLM (Gemini API)
-    ↓
-Save the actual output
-    ↓
-Evaluate it across multiple dimensions
-    ↓
-Identify failure modes
-    ↓
-Design an improved prompt
-    ↓
-Compare versions side-by-side
-    ↓
-Document what changed and why
+```text
+Tell me about black holes.
 ```
 
-The result is a reproducible, documented record of prompt engineering decisions —
-the kind of systematic thinking that distinguishes prompt engineering from
-"trial and error by vibes".
+**V2 — explicit length, audience, and language**
 
----
+```text
+Explain black holes in exactly 3 sentences. Use simple words
+a 12-year-old can understand. Do not use any jargon.
+```
 
-## Problem Being Solved
+Both versions ask about the same topic. V2 adds a sentence limit and a target reader, giving the model a clearer output specification.
 
-LLMs are highly sensitive to prompt wording.  The same question phrased
-differently can produce wildly different outputs — in length, format, accuracy,
-and safety.
+**Original demo result, reported by the project author:**
 
-Without a structured evaluation process, prompt development becomes:
-- Undocumented ("I just kept tweaking until it worked")
-- Non-reproducible ("Works on my machine")
-- Unmeasurable ("It seemed better")
-
-This lab provides the tooling to make prompt development **systematic**,
-**measurable**, and **documented**.
-
----
-
-## Why Prompt Evaluation Matters
-
-| Problem | Without Evaluation | With Evaluation |
+| Metric | V1: vague | V2: specific |
 |---|---|---|
-| Format compliance | Hope the model follows format | Detect programmatically |
-| Hallucination | Catch it manually after deployment | Flag hedging language automatically |
-| Safety | Trust the model's defaults | Test safety-sensitive cases explicitly |
-| Iteration | Gut feeling | Side-by-side comparison with metrics |
-| Documentation | "I improved the prompt" | Recorded rationale + failure analysis |
+| Word count | 261 | 51 |
+| Finish reason | `MAX_TOKENS` — cut off | `STOP` — complete |
 
----
+That earlier result is retained as the project's original example. It is **not** the run shown in the new screenshots; exact outputs vary with model and sampling.
 
-## Architecture
+**Fresh run shown in the screenshots:**
+
+| Metric | V1: vague | V2: specific |
+|---|---|---|
+| Word count | 764 | 52 |
+| Character count | 4,550 | 285 |
+| Latency (ms) | 4,878 | 2,058 |
+| Total tokens | 1,027 | 89 |
+| Finish reason | `MAX_TOKENS` | `STOP` |
+
+<img src="docs/screenshots/04_results_sidebyside.png" width="700" alt="Black-hole response excerpts showing the expansive V1 answer and the complete short V2 answer"/>
+
+*Output detail: V1 continues beyond the visible excerpt, while V2 fits into three sentences. Reading the answers alongside the measurements helps separate brevity from answer quality.*
+
+<img src="docs/screenshots/05_comparison_table.png" width="700" alt="Quick Comparison table showing 764 versus 52 words and MAX_TOKENS versus STOP"/>
+
+*The app's Quick Comparison table records the measured word count, character count, latency, token usage, and finish reason for the same captured run.*
+
+In this run, V2 used about **93% fewer words**, **91% fewer total tokens**, and **58% less time**. Lower token usage can reduce cost on a token-priced plan, but this app does not calculate billing. This example demonstrates a measurable improvement in brevity and completion, not a universal guarantee that specific prompts are always faster or better. `STOP` and a short answer do not establish factual correctness or full instruction compliance; the generated content still needs review.
+
+## 🗺️ App Pages
+
+### 1. 🚀 Run Experiment
+
+<img src="docs/screenshots/02_run_experiment.png" width="700" alt="Run Experiment page with the Ambiguous Instruction test case expanded and model parameters visible"/>
+
+*Choose a preset case, inspect its problem and context, and configure model parameters. Prompt versions include rationales and expected failure modes so each run tests a specific change.*
+
+### 2. ✏️ Custom Prompt
+
+<img src="docs/screenshots/03_custom_prompt.png" width="700" alt="Custom Prompt page with the vague and specific black-hole prompts filled in"/>
+
+*Enter two versions of any task and optional context. The filled black-hole example shows how audience and length constraints can be tested with the same model settings.*
+
+<img src="docs/screenshots/04_results_sidebyside.png" width="700" alt="Custom Prompt side-by-side results for the black-hole experiment"/>
+
+*Read both responses together: the V1 excerpt is expansive, while V2 is complete and short. This view exposes differences that a single score would miss.*
+
+<img src="docs/screenshots/05_comparison_table.png" width="700" alt="Custom Prompt Quick Comparison metrics table"/>
+
+*Check the quantitative tradeoffs below the answers. Finish reason distinguishes hitting a token limit from ending normally.*
+
+### 3. 📊 Compare Outputs
+
+<img src="docs/screenshots/09_compare_outputs.png" width="700" alt="Compare Outputs page showing the preset summary versions and their prompt rationales"/>
+
+*Compare the latest preset experiment's outputs and rationales; its Quick Metrics table appears below. In this summary case, V2 is slightly longer than V1, illustrating why improvements must be assessed against the task rather than word count alone.*
+
+### 4. 🔍 Evaluate
+
+<img src="docs/screenshots/06_evaluate.png" width="700" alt="Evaluation page with OBJECTIVE, HEURISTIC, GROUNDED and LLM-JUDGE labels and measured scores"/>
+
+*Objective measurements appear alongside explicitly labelled heuristic checks. The labels and explanations make clear which values are measurements and which are approximate signals.*
+
+### 5. ⚠️ Failure Log
+
+<img src="docs/screenshots/07_failure_log.png" width="700" alt="Failure Log form with an ambiguity category, jargon observation and root-cause analysis"/>
+
+*An unsaved analysis draft links the preset V1's unexplained jargon to its unspecified audience. The form captures a failure category, description, root cause, proposed fix, and whether the fix worked.*
+
+### 6. 📋 Experiment History
+
+<img src="docs/screenshots/08_history.png" width="700" alt="Experiment History table showing saved prompt versions, models, success status, word counts, latency and tokens"/>
+
+*Browse and filter saved preset runs, including unsuccessful API calls. The page also supports detailed inspection and CSV export, giving prompt experiments a reviewable record.*
+
+**Current workflow:** Custom Prompt keeps its outputs and Quick Comparison in the current session. Run Experiment populates Compare Outputs and Evaluate and saves records for History; custom runs are not automatically added to those pages.
+
+## 🏗️ Architecture
 
 ```mermaid
 flowchart TD
@@ -105,7 +131,7 @@ flowchart TD
     E --> H["experiments/\n*.json results"]
     E --> I["experiments/\nfailure_cases.json"]
 
-    B --> J["Gemini API\ngoogle-generativeai"]
+    B --> J["Gemini API\ngoogle-genai"]
 
     K["test_cases/\nsample_cases.json"] --> A
 
@@ -114,25 +140,31 @@ flowchart TD
     L --> B
 ```
 
----
+The Streamlit entry point coordinates the Gemini wrapper, evaluation pipeline, and JSON/CSV persistence. Prompt-management utilities provide file-based version storage, while the dashboard's preset cases come from `test_cases/sample_cases.json`. The API wrapper uses the **`google-genai` SDK v2+** and returns structured results so callers can handle success, errors, tokens, latency, and finish reason consistently.
 
-## Features
+### Features
 
 - **8 pre-built test cases** covering common prompt engineering challenges
 - **Multi-version prompting** — run V1, V2, V3 in one click
 - **Side-by-side comparison** of outputs, word counts, latency, and token usage
 - **Honest evaluation** — metrics are labelled `[OBJECTIVE]`, `[HEURISTIC]`, `[GROUNDED]`, or `[LLM-JUDGE]`
 - **Failure case log** — structured records with failure type, root cause, and fix
-- **Experiment history** — all runs saved to JSON, exportable to CSV
+- **Experiment history** — preset experiment runs saved to JSON, exportable to CSV
 - **Parameter experimentation** — control temperature and max tokens with explanations
 - **LLM-as-judge** — optional qualitative scoring (clearly labelled as non-deterministic)
 - **No fabricated results** — every score comes from a real computation or real API call
 
----
+### Prompt development workflow
 
-## Evaluation Methodology
+```text
+Design a prompt → Run against Gemini → Inspect the actual output
+       → Evaluate → Identify failure modes → Improve the prompt
+       → Compare versions → Document what changed and why
+```
 
-See [`docs/evaluation_methodology.md`](docs/evaluation_methodology.md) for the full explanation.
+LLMs are sensitive to wording: length, format, factual content, and safety behaviour may change between prompts. Keeping outputs, parameters, rationales, and failure analysis together makes iteration measurable and documented rather than relying on memory or intuition.
+
+## 📊 Evaluation Methodology
 
 ### Metric Types
 
@@ -149,26 +181,32 @@ See [`docs/evaluation_methodology.md`](docs/evaluation_methodology.md) for the f
 - Compute a universal "accuracy %" for open-ended generation
 - Pre-populate results
 
----
+### Why evaluate?
 
-## Prompt Iteration Example
+| Problem | Without evaluation | With evaluation |
+|---|---|---|
+| Format compliance | Assume the format was followed | Check programmatically |
+| Hallucination | Rely only on casual inspection | Flag hedging for review; it is not proof of hallucination |
+| Safety | Assume model defaults are sufficient | Test safety-sensitive cases explicitly |
+| Iteration | Judge changes by feel | Compare actual outputs and measurements |
+| Documentation | Say a prompt was improved | Record the rationale and failure analysis |
 
-### Test Case B: Structured JSON Output
+### Prompt iteration example
+
+#### Test Case B: Structured JSON Output
 
 **Problem:** Model should return a JSON array, but without a schema, it returns inconsistent output.
 
----
 
 **Prompt V1 (Baseline):**
 ```
 List three popular programming languages as JSON.
 ```
 
-**Observed failure mode:**  
-Output was wrapped in ` ```json ` markdown fences. Field names varied between runs
-(`language` vs `name` vs `lang`). Prose was sometimes added before the JSON.
+**Failure mode this example targets:**
+Output may be wrapped in ` ```json ` markdown fences. Field names can vary between runs
+(`language` vs `name` vs `lang`). Prose may be added before the JSON.
 
----
 
 **Prompt V2:**
 ```
@@ -182,7 +220,6 @@ output format requirement. Removes format ambiguity.
 
 **Remaining failure mode:** Model may still use markdown fences.
 
----
 
 **Prompt V3:**
 ```
@@ -193,13 +230,9 @@ Start your response with '[' and end with ']'.
 ```
 
 **Reason for modification:** Anchors output start/end characters. Explicitly
-bans markdown. Eliminates the remaining fence issue.
+bans markdown. Targets the remaining fence issue; validate the next output to check whether it worked.
 
----
-
-## Failure Analysis Approach
-
-See [`docs/failure_analysis.md`](docs/failure_analysis.md) for the full guide.
+### Failure analysis approach
 
 Each failure case is recorded with:
 
@@ -217,137 +250,7 @@ Fix Worked     → Yes / No / Partially / Unknown
 Hallucination/confabulation, Refusal (over-cautious), Refusal (appropriate),
 Safety violation, Inconsistency, Context ignored, Ambiguity exploitation.
 
----
-
-## Installation
-
-### Prerequisites
-- Python 3.10 or later
-- A Google Gemini API key (free at [https://aistudio.google.com/app/apikey](https://aistudio.google.com/app/apikey))
-
-### Steps
-
-```bash
-# 1. Clone the repository
-git clone https://github.com/YOUR_USERNAME/GenAI-Prompt-Evaluation-Lab.git
-cd GenAI-Prompt-Evaluation-Lab
-
-# 2. Create a virtual environment
-python -m venv venv
-
-# 3. Activate it
-# Windows:
-venv\Scripts\activate
-# macOS / Linux:
-source venv/bin/activate
-
-# 4. Install dependencies
-pip install -r requirements.txt
-
-# 5. Set up environment variables
-cp .env.example .env
-# Edit .env and add your GEMINI_API_KEY
-```
-
----
-
-## Environment Variables
-
-| Variable | Required | Default | Description |
-|---|---|---|---|
-| `GEMINI_API_KEY` | **Yes** | — | Your Gemini API key |
-| `GEMINI_MODEL` | No | `gemini-1.5-flash` | Default model to use |
-| `GEMINI_TEMPERATURE` | No | `0.7` | Default temperature |
-| `GEMINI_MAX_TOKENS` | No | `1024` | Default max output tokens |
-
-See [`.env.example`](.env.example) for the template.
-
-> **Security:** The `.env` file is in `.gitignore` and will never be committed.
-
----
-
-## Running Locally
-
-```bash
-# Activate your virtual environment first
-python -m streamlit run app.py
-```
-
-> **Windows note:** Use `python -m streamlit run app.py` instead of `streamlit run app.py`.
-> This bypasses Application Control policies that sometimes block `streamlit.exe`.
-
-The app opens at `http://localhost:8501`.
-
-**Navigation:**
-1. **🚀 Run Experiment** — Select a test case, set parameters, run prompts
-2. **📊 Compare Outputs** — Side-by-side comparison of versions
-3. **🔍 Evaluate** — View heuristic and objective scores
-4. **⚠️ Failure Log** — Record and browse failure cases
-5. **📋 Experiment History** — Browse and export all saved runs
-
----
-
-## Running Tests
-
-```bash
-# Run all tests
-pytest tests/ -v
-
-# Run specific test file
-pytest tests/test_evaluator.py -v
-pytest tests/test_prompt_manager.py -v
-pytest tests/test_llm_client.py -v
-
-# Run with coverage (if pytest-cov is installed)
-pytest tests/ --cov=src --cov-report=term-missing
-```
-
-**Important:** All tests use mocks — no real Gemini API calls are made during
-testing. Tests will pass without a `.env` file or API key.
-
----
-
-## Project Structure
-
-```
-GenAI-Prompt-Evaluation-Lab/
-│
-├── app.py                      ← Streamlit dashboard (entry point)
-├── README.md                   ← This file
-├── requirements.txt            ← Python dependencies
-├── .env.example                ← Environment variable template
-├── .gitignore                  ← Excludes .env, venv, experiment data
-│
-├── src/
-│   ├── llm_client.py           ← Gemini API wrapper (structured results)
-│   ├── evaluator.py            ← Evaluation pipeline (honest metrics)
-│   ├── prompt_manager.py       ← Prompt file CRUD + InlineRegistry
-│   └── utils.py                ← Persistence, export, comparison helpers
-│
-├── prompts/
-│   ├── baseline/               ← V1 prompts (*.txt + *.meta.json)
-│   └── improved/               ← V2/V3 prompts (*.txt + *.meta.json)
-│
-├── test_cases/
-│   └── sample_cases.json       ← 8 pre-built test cases with all versions
-│
-├── experiments/
-│   ├── README.md               ← Explains the experiments directory
-│   └── *.json                  ← Saved experiment results (git-ignored)
-│
-├── tests/
-│   ├── test_evaluator.py       ← 40+ evaluator unit tests (mocked)
-│   ├── test_prompt_manager.py  ← 30+ prompt manager unit tests
-│   └── test_llm_client.py      ← LLM client unit tests (mocked API)
-│
-└── docs/
-    ├── evaluation_methodology.md ← Every metric explained with limitations
-    └── failure_analysis.md       ← Failure taxonomy, template, examples
-```
-
----
-
-## Test Cases Included
+### Test cases included
 
 | ID | Category | Prompt Engineering Problem |
 |---|---|---|
@@ -366,9 +269,109 @@ Each test case includes:
 - V2 improved prompt + rationale
 - V3 (where appropriate) + rationale
 
----
+### Key concepts
 
-## Limitations
+1. **Temperature** — controls output randomness. Lower values reduce sampling randomness; even 0.0 does not guarantee identical responses across model or service changes. For evaluation, low temperature is preferred.
+
+2. **Prompt grounding** — explicitly instructing the model to answer from a given context rather than its training data.
+
+3. **Hallucination** — when a model generates plausible-sounding but incorrect information with false confidence.
+
+4. **LLM-as-judge** — using the LLM itself to evaluate outputs. Useful but biased toward self-evaluation.
+
+5. **Jaccard similarity** — `|intersection| / |union|` of two sets. Used here for keyword overlap between response and reference answer. Fast and deterministic but not semantic.
+
+The repository also contains [evaluation_methodology.md](docs/evaluation_methodology.md) and [failure_analysis.md](docs/failure_analysis.md). These are currently placeholder files; the methodology and failure-analysis explanation are included above.
+
+## 🚀 Quick Start
+
+Requires **Python 3.10+** and a [Google Gemini API key](https://aistudio.google.com/app/apikey). Download or clone this repository and open a PowerShell terminal in its root directory.
+
+For a fresh checkout, run these five commands. If you already have a `.env`, keep it and skip the copy command.
+
+```powershell
+python -m venv venv
+.\venv\Scripts\python.exe -m pip install -r requirements.txt
+Copy-Item .env.example .env
+notepad .env
+.\venv\Scripts\python.exe -m streamlit run app.py
+```
+
+In the editor, set `GEMINI_API_KEY` to your own key, save, and close it before running the last command. Open [http://localhost:8501](http://localhost:8501).
+
+Using `python.exe -m streamlit` avoids relying on the `streamlit.exe` launcher, which some Windows Application Control policies block. On macOS/Linux, use `venv/bin/python` in place of `.\venv\Scripts\python.exe`, and copy/edit `.env.example` using your platform's tools.
+
+### Environment variables
+
+| Variable | Required | Default | Description |
+|---|---|---|---|
+| `GEMINI_API_KEY` | **Yes** | — | Your Gemini API key |
+| `GEMINI_MODEL` | No | `gemini-flash-latest` | Default for client calls that do not pass a model |
+| `GEMINI_TEMPERATURE` | No | `0.7` | Default for client calls that do not pass a temperature |
+| `GEMINI_MAX_TOKENS` | No | `1024` | Default for client calls that do not pass a token limit |
+
+Dashboard controls pass explicit settings and take precedence over client defaults. Model access and service availability can change; the screenshot run used the existing Flash Lite option.
+
+See [`.env.example`](.env.example) for the template. `.gitignore` excludes the real `.env`, virtual environment, and generated experiment JSON/CSV files. Keep API keys out of source files and commits.
+
+## 🧪 Running Tests
+
+From the repository root:
+
+```powershell
+.\venv\Scripts\pytest tests/ -v
+```
+
+**Expected: `117 passed`.** Verified during this documentation update. The automated suite uses mocks, makes no real Gemini API calls, and can run without an API key.
+
+For focused runs, use `tests/test_evaluator.py`, `tests/test_prompt_manager.py`, or `tests/test_llm_client.py` in place of `tests/`. With `pytest-cov` installed, add `--cov=src --cov-report=term-missing`.
+
+`tests/test_api_connection.py` is a separate manual connection check: running that file directly makes a real API call, but pytest does not execute its guarded entry point.
+
+## 📁 Project Structure
+
+```text
+GenAI-Prompt-Evaluation-Lab/
+├── app.py                         # Streamlit dashboard: six pages
+├── README.md                      # Visual portfolio and setup
+├── QUICKSTART.md                  # Existing command reference
+├── requirements.txt               # Application and test dependencies
+├── .env.example                   # Environment variable template
+├── .gitignore                     # Excludes secrets, venv and generated data
+├── src/
+│   ├── llm_client.py              # Gemini wrapper and structured API results
+│   ├── evaluator.py               # Labelled metrics and optional LLM judge
+│   ├── prompt_manager.py          # Prompt file CRUD and InlineRegistry
+│   └── utils.py                   # JSON persistence, CSV export and helpers
+├── prompts/
+│   ├── baseline/                  # V1 .txt prompts and .meta.json files
+│   └── improved/                  # V2/V3 prompts and metadata
+├── test_cases/
+│   └── sample_cases.json          # Eight preset cases with prompt versions
+├── experiments/
+│   ├── README.md                  # Explains generated result storage
+│   └── *.json / *.csv             # Local experiment data; git-ignored
+├── tests/
+│   ├── test_evaluator.py          # Objective, heuristic and judge tests
+│   ├── test_prompt_manager.py     # Prompt persistence and validation tests
+│   ├── test_llm_client.py         # Mocked API success/error tests
+│   └── test_api_connection.py     # Manual API connection check
+└── docs/
+    ├── evaluation_methodology.md  # Existing documentation placeholder
+    ├── failure_analysis.md        # Existing documentation placeholder
+    └── screenshots/
+        ├── 01_hero.png
+        ├── 02_run_experiment.png
+        ├── 03_custom_prompt.png
+        ├── 04_results_sidebyside.png
+        ├── 05_comparison_table.png
+        ├── 06_evaluate.png
+        ├── 07_failure_log.png
+        ├── 08_history.png
+        └── 09_compare_outputs.png
+```
+
+## ⚠️ Limitations
 
 1. **Heuristic evaluation is approximate.** Keyword matching, refusal detection, and hallucination risk scoring are rules-based and will produce false positives and negatives.
 
@@ -384,9 +387,13 @@ Each test case includes:
 
 7. **Test cases use one context variant.** The robustness test (H) includes multiple question variants in the JSON but currently runs only the first variant automatically.
 
----
+8. **Custom Prompt persistence.** Custom runs remain in session memory and are not automatically saved to History or connected to Evaluate.
 
-## Future Improvements
+9. **Efficiency is not correctness.** Word count, token usage, latency, and `STOP` do not establish answer quality. No billing estimate or repeated-run performance benchmark is included.
+
+10. **Model availability changes.** An API key may load successfully even when a selected model is unavailable or overloaded. The screenshots record one successful fallback configuration, not guaranteed access to every model in the dropdown.
+
+## 🔮 Future Improvements
 
 - [ ] Semantic similarity using sentence embeddings (e.g., `sentence-transformers`)
 - [ ] Multiple model comparison (GPT-4o, Claude, Gemini) in one run
@@ -396,29 +403,10 @@ Each test case includes:
 - [ ] Prompt template library with tagging and search
 - [ ] Export to a standard evaluation format (e.g., HELM-compatible)
 
----
+### Contributing
 
-## Key Concepts for Understanding This Project
+This is a portfolio project. If you find a bug or want to suggest an improvement, feel free to open an issue.
 
-1. **Temperature** — controls output randomness. 0.0 is deterministic; higher values are more creative but less reproducible. For evaluation, low temperature is preferred.
-
-2. **Prompt grounding** — explicitly instructing the model to answer from a given context rather than its training data.
-
-3. **Hallucination** — when a model generates plausible-sounding but incorrect information with false confidence.
-
-4. **LLM-as-judge** — using the LLM itself to evaluate outputs. Useful but biased toward self-evaluation.
-
-5. **Jaccard similarity** — `|intersection| / |union|` of two sets. Used here for keyword overlap between response and reference answer. Fast and deterministic but not semantic.
-
----
-
-## Contributing
-
-This is a portfolio project. If you find a bug or want to suggest an improvement,
-feel free to open an issue.
-
----
-
-## License
+### License
 
 MIT
