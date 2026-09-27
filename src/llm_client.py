@@ -1,7 +1,7 @@
 """
 src/llm_client.py
 
-Thin wrapper around the Google Gemini API.
+Thin wrapper around the Google Gemini API (google-genai SDK).
 
 Design goals:
   - One place to swap models or API providers in the future.
@@ -9,6 +9,9 @@ Design goals:
   - Handles the most common error cases cleanly (missing key, rate-limit,
     malformed response) and surfaces them as readable strings, not stack traces.
   - Records latency and token counts so the evaluator can use them.
+
+SDK: google-genai (v2+) — the successor to google-generativeai.
+     Import: import google.genai as genai
 
 Interview talking point:
   Centralising API calls means that if you want to A/B test two models
@@ -24,15 +27,19 @@ from dotenv import load_dotenv
 load_dotenv()
 
 # ─── Constants ────────────────────────────────────────────────────────────────
-DEFAULT_MODEL = os.getenv("GEMINI_MODEL", "gemini-1.5-flash")
+DEFAULT_MODEL = os.getenv("GEMINI_MODEL", "gemini-flash-latest")
 DEFAULT_TEMPERATURE = float(os.getenv("GEMINI_TEMPERATURE", "0.7"))
 DEFAULT_MAX_TOKENS = int(os.getenv("GEMINI_MAX_TOKENS", "1024"))
 
-# Supported models and their display names (free-tier friendly)
+# Supported models — these are the generateContent-capable models on this key.
+# Use short aliases (without "models/" prefix) for the API call.
 SUPPORTED_MODELS = {
-    "gemini-1.5-flash": "Gemini 1.5 Flash (free tier, fast)",
-    "gemini-1.5-pro": "Gemini 1.5 Pro (free tier, capable)",
-    "gemini-1.0-pro": "Gemini 1.0 Pro (free tier, legacy)",
+    "gemini-flash-latest": "Gemini Flash Latest (fast, free-tier)",
+    "gemini-2.5-flash": "Gemini 2.5 Flash (capable, free-tier)",
+    "gemini-2.5-pro": "Gemini 2.5 Pro (most capable, free-tier)",
+    "gemini-flash-lite-latest": "Gemini Flash Lite (lightest, fastest)",
+    "gemini-3.5-flash": "Gemini 3.5 Flash (experimental)",
+    "gemini-pro-latest": "Gemini Pro Latest",
 }
 
 
@@ -75,7 +82,7 @@ def _make_result(
 # ─── Client ───────────────────────────────────────────────────────────────────
 class GeminiClient:
     """
-    Wraps google-generativeai so that the rest of the application is
+    Wraps google-genai so that the rest of the application is
     decoupled from the SDK's internal types.
 
     Usage:
@@ -90,47 +97,27 @@ class GeminiClient:
     def __init__(self, api_key: str | None = None, model: str = DEFAULT_MODEL):
         self._api_key = api_key or os.getenv("GEMINI_API_KEY", "")
         self.model_name = model
-        self._client = None  # lazy-loaded
+        self._genai_client = None  # lazy-loaded
 
     # ------------------------------------------------------------------
     # Private helpers
     # ------------------------------------------------------------------
 
-    def _ensure_client(self) -> str | None:
+    def _get_client(self):
         """
-        Attempt to initialise the Gemini SDK.
-        Returns an error string if setup fails, None if successful.
+        Return (or create) a google.genai.Client instance.
+        Raises ValueError if no API key is set.
         """
-        if not self._api_key:
-            return (
-                "GEMINI_API_KEY is not set.  "
-                "Copy .env.example → .env and add your key from "
-                "https://aistudio.google.com/app/apikey"
-            )
-        try:
-            import google.generativeai as genai  # noqa: PLC0415
-
-            genai.configure(api_key=self._api_key)
-            self._client = genai
-            return None
-        except ImportError:
-            return (
-                "google-generativeai is not installed.  "
-                "Run: pip install google-generativeai"
-            )
-
-    def _get_model(self, temperature: float, max_tokens: int):
-        """Return a configured GenerativeModel instance."""
-        import google.generativeai as genai  # noqa: PLC0415
-
-        generation_config = genai.types.GenerationConfig(
-            temperature=temperature,
-            max_output_tokens=max_tokens,
-        )
-        return genai.GenerativeModel(
-            model_name=self.model_name,
-            generation_config=generation_config,
-        )
+        if self._genai_client is None:
+            if not self._api_key:
+                raise ValueError(
+                    "GEMINI_API_KEY is not set.  "
+                    "Copy .env.example → .env and add your key from "
+                    "https://aistudio.google.com/app/apikey"
+                )
+            import google.genai as genai  # noqa: PLC0415
+            self._genai_client = genai.Client(api_key=self._api_key)
+        return self._genai_client
 
     # ------------------------------------------------------------------
     # Public API
@@ -152,8 +139,7 @@ class GeminiClient:
         temperature         : 0.0 (deterministic) → 2.0 (very creative).
                               Lower values make evaluation more reproducible.
         max_tokens          : Upper bound on output length.
-        system_instruction  : Optional system-level instruction prepended
-                              before the user prompt (supported by 1.5 models).
+        system_instruction  : Optional system-level instruction.
 
         Returns
         -------
@@ -171,70 +157,59 @@ class GeminiClient:
                 error="Prompt cannot be empty.",
             )
 
-        # Ensure SDK is available and key is present
-        init_error = self._ensure_client()
-        if init_error:
+        # Validate API key before attempting
+        if not self._api_key:
             return _make_result(
                 success=False,
                 text="",
                 model=self.model_name,
                 prompt=prompt,
-                error=init_error,
+                error=(
+                    "GEMINI_API_KEY is not set.  "
+                    "Copy .env.example → .env and add your key from "
+                    "https://aistudio.google.com/app/apikey"
+                ),
             )
 
         # Attempt generation
         start = time.perf_counter()
         try:
-            import google.generativeai as genai  # noqa: PLC0415
+            import google.genai as genai  # noqa: PLC0415
+            import google.genai.types as genai_types  # noqa: PLC0415
 
-            generation_config = genai.types.GenerationConfig(
-                temperature=temperature,
-                max_output_tokens=max_tokens,
-            )
+            client = self._get_client()
 
-            model_kwargs: dict[str, Any] = {
-                "model_name": self.model_name,
-                "generation_config": generation_config,
+            # Build config
+            config_kwargs: dict[str, Any] = {
+                "temperature": temperature,
+                "max_output_tokens": max_tokens,
             }
             if system_instruction and system_instruction.strip():
-                model_kwargs["system_instruction"] = system_instruction
+                config_kwargs["system_instruction"] = system_instruction
 
-            model = genai.GenerativeModel(**model_kwargs)
-            response = model.generate_content(prompt)
+            generate_config = genai_types.GenerateContentConfig(**config_kwargs)
+
+            response = client.models.generate_content(
+                model=self.model_name,
+                contents=prompt,
+                config=generate_config,
+            )
 
             latency_ms = (time.perf_counter() - start) * 1000
 
             # Extract text safely
-            try:
-                text = response.text
-            except ValueError:
-                # Response blocked by safety filters
-                finish = (
-                    response.candidates[0].finish_reason.name
-                    if response.candidates
-                    else "UNKNOWN"
-                )
-                return _make_result(
-                    success=False,
-                    text="",
-                    model=self.model_name,
-                    prompt=prompt,
-                    temperature=temperature,
-                    max_tokens=max_tokens,
-                    latency_ms=latency_ms,
-                    error=f"Response blocked by safety filters (finish_reason={finish}).",
-                    finish_reason=finish,
-                )
+            # response.text can be None with thinking models (thought_signature
+            # bytes are present but the SDK doesn't join them into .text).
+            # Fall back to reading parts directly from candidates.
+            text = _extract_text(response)
 
-            # Extract token usage when available
+            # Extract token usage (new SDK field names)
             usage = getattr(response, "usage_metadata", None)
             input_tokens = getattr(usage, "prompt_token_count", None)
             output_tokens = getattr(usage, "candidates_token_count", None)
             total_tokens = getattr(usage, "total_token_count", None)
 
-            finish_reason = ""
-            if response.candidates:
-                finish_reason = response.candidates[0].finish_reason.name
+            finish_reason = _safe_finish_reason(response)
 
             return _make_result(
                 success=True,
@@ -273,7 +248,56 @@ class GeminiClient:
         return list(SUPPORTED_MODELS.keys())
 
 
-# ─── Error classification ─────────────────────────────────────────────────────
+# ─── Helpers ─────────────────────────────────────────────────────────────────
+
+def _extract_text(response: Any) -> str:
+    """
+    Robustly extract generated text from a GenerateContentResponse.
+
+    The new google.genai SDK returns response.text = None when the response
+    contains thought_signature bytes (thinking models).  In that case we
+    manually join the text parts from candidates[0].content.parts,
+    skipping any non-text parts.
+    """
+    # Fast path: .text works
+    try:
+        text = response.text
+        if text is not None:
+            return text
+    except (ValueError, AttributeError):
+        pass
+
+    # Slow path: walk the parts
+    try:
+        candidates = getattr(response, "candidates", None) or []
+        if candidates:
+            content = getattr(candidates[0], "content", None)
+            parts = getattr(content, "parts", None) or []
+            text_parts = [
+                getattr(p, "text", None)
+                for p in parts
+                if getattr(p, "text", None) is not None
+            ]
+            return "".join(text_parts)
+    except Exception:  # noqa: BLE001
+        pass
+
+    return ""
+
+
+def _safe_finish_reason(response: Any) -> str:
+    """Extract finish reason string safely from a response object."""
+    try:
+        candidates = getattr(response, "candidates", None)
+        if candidates:
+            reason = getattr(candidates[0], "finish_reason", None)
+            if reason is not None:
+                # May be an enum or a string
+                return reason.name if hasattr(reason, "name") else str(reason)
+    except Exception:  # noqa: BLE001
+        pass
+    return ""
+
 
 def _classify_error(exc: Exception) -> str:
     """
@@ -296,4 +320,10 @@ def _classify_error(exc: Exception) -> str:
         return "Request timed out.  Check your network connection and try again."
     if "safety" in msg or "blocked" in msg:
         return "Response was blocked by Gemini's safety filters."
+    if "not found" in msg or "404" in msg:
+        return (
+            f"Model not found: {exc}  "
+            "Check GEMINI_MODEL in .env — valid options: "
+            + ", ".join(SUPPORTED_MODELS.keys())
+        )
     return f"Unexpected API error: {exc}"
