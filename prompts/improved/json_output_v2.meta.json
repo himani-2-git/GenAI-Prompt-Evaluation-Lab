@@ -1,0 +1,7 @@
+{
+  "version": "v2",
+  "category": "Structured JSON output",
+  "description": "Adds explicit schema, field names, and output format requirements.",
+  "rationale": "Provides explicit schema, field names, and output format requirements.",
+  "failure_mode": "Model may still add markdown code fences around the JSON."
+}

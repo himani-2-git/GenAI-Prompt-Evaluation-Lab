@@ -1,0 +1,1 @@
+Return only a raw JSON array with no markdown formatting, no code fences, no explanation. The array must contain exactly three objects, each with exactly these keys: "name", "language", "use_case". Start your response with '[' and end with ']'.

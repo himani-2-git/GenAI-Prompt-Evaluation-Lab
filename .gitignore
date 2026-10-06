@@ -47,6 +47,7 @@ experiments/*.csv
 # Keep the README
 !experiments/README.md
 
-# ─── Logs ─────────────────────────────────────────────────────────────────────
+# ─── Logs & Local Outputs ─────────────────────────────────────────────────────
 *.log
 logs/
+output/

@@ -7,9 +7,10 @@ Design goals and honesty contract:
   - NEVER fabricate scores.
   - NEVER present heuristics as objective ground truth.
   - Every metric is clearly labelled as one of:
-      [HEURISTIC]   — rule-based, fast, deterministic, limited
-      [LLM-JUDGE]   — uses the LLM itself to score, non-deterministic
       [OBJECTIVE]   — measurable without opinion (e.g., token count, latency)
+      [HEURISTIC]   — rule-based, fast, deterministic, limited
+      [GROUNDED]    — requires a reference/ground-truth answer to be meaningful
+      [LLM-JUDGE]   — uses the LLM itself to score, non-deterministic
   - If there is no ground truth, we say so instead of inventing accuracy %.
 
 Metrics implemented:

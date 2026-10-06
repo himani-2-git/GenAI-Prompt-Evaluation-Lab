@@ -232,6 +232,8 @@ Start your response with '[' and end with ']'.
 **Reason for modification:** Anchors output start/end characters. Explicitly
 bans markdown. Targets the remaining fence issue; validate the next output to check whether it worked.
 
+> **Prompt Version Files on Disk:** Dedicated `.txt` and `.meta.json` files exist in `prompts/baseline/` (V1) and `prompts/improved/` (V2 and V3) for both `ambiguous_summarise` and `json_output`. Additionally, all eight test cases include complete V1–V3 prompt text, rationales, and failure modes directly inside `test_cases/sample_cases.json`.
+
 ### Failure analysis approach
 
 Each failure case is recorded with:
@@ -344,8 +346,8 @@ GenAI-Prompt-Evaluation-Lab/
 │   ├── prompt_manager.py          # Prompt file CRUD and InlineRegistry
 │   └── utils.py                   # JSON persistence, CSV export and helpers
 ├── prompts/
-│   ├── baseline/                  # V1 .txt prompts and .meta.json files
-│   └── improved/                  # V2/V3 prompts and metadata
+│   ├── baseline/                  # V1 prompts (ambiguous_summarise, json_output) + metadata
+│   └── improved/                  # V2/V3 prompts (ambiguous_summarise, json_output) + metadata
 ├── test_cases/
 │   └── sample_cases.json          # Eight preset cases with prompt versions
 ├── experiments/

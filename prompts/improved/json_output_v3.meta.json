@@ -1,0 +1,7 @@
+{
+  "version": "v3",
+  "category": "Structured JSON output",
+  "description": "Anchors start/end brackets and bans markdown formatting or explanations.",
+  "rationale": "Removes markdown ambiguity by anchoring start/end characters. Explicitly bans fences and prose.",
+  "failure_mode": "Very prescriptive prompts can reduce creativity — output may be generic."
+}
