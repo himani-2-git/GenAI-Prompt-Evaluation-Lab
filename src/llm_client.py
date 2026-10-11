@@ -18,8 +18,10 @@ Interview talking point:
   you only change this file, not every caller.
 """
 
+import hashlib
 import os
 import time
+from abc import ABC, abstractmethod
 from typing import Any
 
 from dotenv import load_dotenv
@@ -42,6 +44,42 @@ SUPPORTED_MODELS = {
     "gemini-pro-latest": "Gemini Pro Latest",
 }
 
+MOCK_MODELS = {
+    "mock-deterministic-v1": "Deterministic Mock v1 (offline, reproducible)",
+}
+
+
+# ─── Provider Interface ───────────────────────────────────────────────────────
+class BaseLLMProvider(ABC):
+    """
+    Minimal provider-independent interface for LLM clients.
+
+    Any provider (GeminiClient, DeterministicMockProvider, or future providers)
+    implements this contract so the evaluation engine and UI remain decoupled
+    from vendor-specific SDKs.
+    """
+
+    provider_name: str = "base"
+    model_name: str = ""
+
+    @abstractmethod
+    def generate(
+        self,
+        prompt: str,
+        temperature: float = DEFAULT_TEMPERATURE,
+        max_tokens: int = DEFAULT_MAX_TOKENS,
+        system_instruction: str = "",
+    ) -> dict[str, Any]:
+        """Generate a response and return the standard result dictionary."""
+
+    @abstractmethod
+    def is_configured(self) -> bool:
+        """Return True if the provider is ready to serve requests."""
+
+    @abstractmethod
+    def list_models(self) -> list[str]:
+        """Return model identifiers supported by this provider."""
+
 
 # ─── Result schema ────────────────────────────────────────────────────────────
 def _make_result(
@@ -58,6 +96,7 @@ def _make_result(
     total_tokens: int | None = None,
     error: str = "",
     finish_reason: str = "",
+    provider: str = "gemini",
 ) -> dict[str, Any]:
     """
     All LLM calls return this same shape.  Callers can always rely on
@@ -66,6 +105,7 @@ def _make_result(
     return {
         "success": success,
         "text": text,
+        "provider": provider,
         "model": model,
         "prompt": prompt,
         "temperature": temperature,
@@ -80,7 +120,7 @@ def _make_result(
 
 
 # ─── Client ───────────────────────────────────────────────────────────────────
-class GeminiClient:
+class GeminiClient(BaseLLMProvider):
     """
     Wraps google-genai so that the rest of the application is
     decoupled from the SDK's internal types.
@@ -93,6 +133,8 @@ class GeminiClient:
         else:
             print(result["error"])
     """
+
+    provider_name: str = "gemini"
 
     def __init__(self, api_key: str | None = None, model: str = DEFAULT_MODEL):
         self._api_key = api_key or os.getenv("GEMINI_API_KEY", "")
@@ -246,6 +288,202 @@ class GeminiClient:
     def list_models(self) -> list[str]:
         """Return the list of model names this client is aware of."""
         return list(SUPPORTED_MODELS.keys())
+
+
+# ─── Deterministic Mock Provider (Offline / Test / Reproducible Demo) ────────
+class DeterministicMockProvider(BaseLLMProvider):
+    """
+    Deterministic, offline LLM provider that works without network access
+    or API credentials.
+
+    Features:
+      - 100% repeatable: identical (prompt, temperature, system_instruction)
+        inputs always yield the exact same output text, token counts, and
+        finish_reason.
+      - Supports custom canned responses via `responses` dict (exact or
+        substring match).
+      - Supports deterministic error simulation via `simulate_error`.
+      - Enforces `max_tokens` truncation (`MAX_TOKENS` vs `STOP`).
+    """
+
+    provider_name: str = "mock"
+
+    def __init__(
+        self,
+        model: str = "mock-deterministic-v1",
+        responses: dict[str, str] | None = None,
+        simulate_error: str | None = None,
+        simulated_latency_ms: float = 5.0,
+    ):
+        self.model_name = model
+        self._responses = dict(responses) if responses else {}
+        self._simulate_error = simulate_error
+        self._simulated_latency_ms = simulated_latency_ms
+
+    def is_configured(self) -> bool:
+        """Mock provider requires no API key and is always configured unless simulating auth missing."""
+        return True
+
+    def list_models(self) -> list[str]:
+        """Return supported mock model identifiers."""
+        return list(MOCK_MODELS.keys())
+
+    def generate(
+        self,
+        prompt: str,
+        temperature: float = DEFAULT_TEMPERATURE,
+        max_tokens: int = DEFAULT_MAX_TOKENS,
+        system_instruction: str = "",
+    ) -> dict[str, Any]:
+        """
+        Deterministically generate a response matching the GeminiClient result schema.
+        """
+        if not prompt or not prompt.strip():
+            return _make_result(
+                success=False,
+                text="",
+                model=self.model_name,
+                prompt=prompt,
+                temperature=temperature,
+                max_tokens=max_tokens,
+                error="Prompt cannot be empty.",
+                provider=self.provider_name,
+            )
+
+        if max_tokens <= 0:
+            return _make_result(
+                success=False,
+                text="",
+                model=self.model_name,
+                prompt=prompt,
+                temperature=temperature,
+                max_tokens=max_tokens,
+                error="max_tokens must be a positive integer.",
+                provider=self.provider_name,
+            )
+
+        if self._simulate_error:
+            err_msg = _classify_error(Exception(self._simulate_error))
+            return _make_result(
+                success=False,
+                text="",
+                model=self.model_name,
+                prompt=prompt,
+                temperature=temperature,
+                max_tokens=max_tokens,
+                latency_ms=self._simulated_latency_ms,
+                error=err_msg,
+                provider=self.provider_name,
+            )
+
+        raw_text = self._resolve_response_text(prompt, temperature, system_instruction)
+        input_tokens = max(1, len(prompt.split()))
+
+        words = raw_text.split()
+        if len(words) > max_tokens:
+            final_text = " ".join(words[:max_tokens])
+            finish_reason = "MAX_TOKENS"
+            output_tokens = max_tokens
+        else:
+            final_text = raw_text
+            finish_reason = "STOP"
+            output_tokens = max(1, len(words))
+
+        total_tokens = input_tokens + output_tokens
+
+        return _make_result(
+            success=True,
+            text=final_text,
+            model=self.model_name,
+            prompt=prompt,
+            temperature=temperature,
+            max_tokens=max_tokens,
+            latency_ms=self._simulated_latency_ms,
+            input_tokens=input_tokens,
+            output_tokens=output_tokens,
+            total_tokens=total_tokens,
+            finish_reason=finish_reason,
+            provider=self.provider_name,
+        )
+
+    def _resolve_response_text(
+        self,
+        prompt: str,
+        temperature: float,
+        system_instruction: str,
+    ) -> str:
+        """Select a canned response or synthesize a deterministic response."""
+        # 1. Exact match in custom responses
+        if prompt in self._responses:
+            return self._responses[prompt]
+
+        # 2. Substring match in custom responses
+        for pattern, reply in self._responses.items():
+            if pattern and pattern in prompt:
+                return reply
+
+        # 3. Deterministic hash of inputs
+        seed_input = f"{self.model_name}|{temperature:.2f}|{system_instruction.strip()}|{prompt.strip()}"
+        digest = hashlib.sha256(seed_input.encode("utf-8")).hexdigest()[:8]
+        p_lower = prompt.lower()
+
+        # LLM-as-judge prompt detection
+        if "respond only with a json object" in p_lower and '"score"' in p_lower:
+            return (
+                '{"score": 4, '
+                f'"explanation": "Deterministic mock judge score (sig={digest})."}}'
+            )
+
+        # Structured JSON request
+        if "json" in p_lower:
+            if "no markdown" in p_lower or "raw json" in p_lower or "start your response with '['" in p_lower:
+                return (
+                    '[{"name": "Python", "language": "Python", "use_case": "AI and data science"}, '
+                    '{"name": "TypeScript", "language": "TypeScript", "use_case": "Web applications"}, '
+                    '{"name": "Rust", "language": "Rust", "use_case": "Systems programming"}]'
+                )
+            return (
+                "```json\n"
+                '[{"name": "Python", "language": "Python", "use_case": "AI and data science"}, '
+                '{"name": "TypeScript", "language": "TypeScript", "use_case": "Web applications"}, '
+                '{"name": "Rust", "language": "Rust", "use_case": "Systems programming"}]\n'
+                "```"
+            )
+
+        # Bullet list request
+        if "bullet" in p_lower:
+            return (
+                f"- First key point extracted deterministically (sig={digest}).\n"
+                "- Second key point summarizing the core concept in plain language.\n"
+                "- Third key point highlighting practical implications and limits."
+            )
+
+        # Default deterministic text response
+        return (
+            f"Deterministic mock response [sig={digest}] for model '{self.model_name}': "
+            "This output is generated offline without network calls to support reproducible evaluation."
+        )
+
+
+def create_provider(
+    provider: str = "gemini",
+    *,
+    api_key: str | None = None,
+    model: str | None = None,
+    **kwargs: Any,
+) -> BaseLLMProvider:
+    """
+    Factory to instantiate an LLM provider by name ('gemini' or 'mock').
+    """
+    norm = provider.strip().lower()
+    if norm == "gemini":
+        return GeminiClient(api_key=api_key, model=model or DEFAULT_MODEL)
+    if norm == "mock":
+        return DeterministicMockProvider(
+            model=model or "mock-deterministic-v1",
+            **kwargs,
+        )
+    raise ValueError(f"Unsupported provider '{provider}'. Expected 'gemini' or 'mock'.")
 
 
 # ─── Helpers ─────────────────────────────────────────────────────────────────

@@ -76,16 +76,22 @@ def load_all_experiments(experiments_dir: Path | None = None) -> list[dict[str, 
     Load all JSON experiment files from experiments_dir, sorted by
     saved_at (newest first).
 
+    Excludes non-experiment files (such as failure_cases.json) and any
+    JSON file that does not deserialize to an experiment dict.
     Returns an empty list if the directory doesn't exist or is empty.
     """
     dest = experiments_dir or EXPERIMENTS_DIR
     if not dest.exists():
         return []
     files = sorted(dest.glob("*.json"), key=lambda p: p.stat().st_mtime, reverse=True)
-    results = []
+    results: list[dict[str, Any]] = []
     for f in files:
+        if f.name == FAILURE_LOG_PATH.name:
+            continue
         try:
-            results.append(load_experiment(f))
+            data = load_experiment(f)
+            if isinstance(data, dict) and ("test_case_id" in data or "prompt_version" in data or "id" in data):
+                results.append(data)
         except (json.JSONDecodeError, OSError):
             pass  # Skip corrupt files silently
     return results
@@ -202,20 +208,26 @@ def _simple_refusal_check(text: str) -> bool:
 FAILURE_LOG_PATH = EXPERIMENTS_DIR / "failure_cases.json"
 
 
-def save_failure_case(failure: dict[str, Any]) -> None:
+def save_failure_case(
+    failure: dict[str, Any],
+    experiments_dir: Path | None = None,
+) -> None:
     """Append a failure case to the shared failure log."""
-    FAILURE_LOG_PATH.parent.mkdir(parents=True, exist_ok=True)
-    existing = load_failure_cases()
+    log_path = (experiments_dir / FAILURE_LOG_PATH.name) if experiments_dir else FAILURE_LOG_PATH
+    log_path.parent.mkdir(parents=True, exist_ok=True)
+    existing = load_failure_cases(experiments_dir=experiments_dir)
     existing.append(failure)
-    FAILURE_LOG_PATH.write_text(json.dumps(existing, indent=2, default=str), encoding="utf-8")
+    log_path.write_text(json.dumps(existing, indent=2, default=str), encoding="utf-8")
 
 
-def load_failure_cases() -> list[dict[str, Any]]:
+def load_failure_cases(experiments_dir: Path | None = None) -> list[dict[str, Any]]:
     """Load all failure cases from the shared log."""
-    if not FAILURE_LOG_PATH.exists():
+    log_path = (experiments_dir / FAILURE_LOG_PATH.name) if experiments_dir else FAILURE_LOG_PATH
+    if not log_path.exists():
         return []
     try:
-        return json.loads(FAILURE_LOG_PATH.read_text(encoding="utf-8"))
+        data = json.loads(log_path.read_text(encoding="utf-8"))
+        return data if isinstance(data, list) else []
     except json.JSONDecodeError:
         return []
 

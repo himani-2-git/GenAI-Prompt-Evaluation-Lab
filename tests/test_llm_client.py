@@ -19,7 +19,14 @@ Tests verify:
 import pytest
 from unittest.mock import MagicMock, patch, PropertyMock
 
-from src.llm_client import GeminiClient, _classify_error, _make_result
+from src.llm_client import (
+    BaseLLMProvider,
+    DeterministicMockProvider,
+    GeminiClient,
+    _classify_error,
+    _make_result,
+    create_provider,
+)
 
 
 # ─── _make_result structure ───────────────────────────────────────────────────
@@ -257,3 +264,124 @@ class TestListModels:
         client = GeminiClient(api_key="fake-key")
         models = client.list_models()
         assert any("flash" in m for m in models)
+
+
+# ─── Provider Interface & DeterministicMockProvider ──────────────────────────
+
+class TestProviderInterface:
+    def test_gemini_client_implements_base_provider(self):
+        client = GeminiClient(api_key="fake-key")
+        assert isinstance(client, BaseLLMProvider)
+        assert client.provider_name == "gemini"
+
+    def test_mock_provider_implements_base_provider(self):
+        mock_provider = DeterministicMockProvider()
+        assert isinstance(mock_provider, BaseLLMProvider)
+        assert mock_provider.provider_name == "mock"
+
+    def test_create_provider_factory(self):
+        g_client = create_provider("gemini", api_key="fake-key")
+        m_client = create_provider("mock")
+        assert isinstance(g_client, GeminiClient)
+        assert isinstance(m_client, DeterministicMockProvider)
+
+    def test_create_provider_invalid_raises(self):
+        with pytest.raises(ValueError, match="Unsupported provider"):
+            create_provider("unknown_provider")
+
+
+class TestDeterministicMockProvider:
+    def test_works_without_api_key_or_network(self, monkeypatch):
+        monkeypatch.delenv("GEMINI_API_KEY", raising=False)
+        provider = DeterministicMockProvider()
+        assert provider.is_configured() is True
+        assert len(provider.list_models()) >= 1
+
+        result = provider.generate("Explain quantum computing in simple words.")
+        assert result["success"] is True
+        assert result["provider"] == "mock"
+        assert result["model"] == "mock-deterministic-v1"
+        assert len(result["text"]) > 0
+        assert result["input_tokens"] > 0
+        assert result["output_tokens"] > 0
+        assert result["total_tokens"] == result["input_tokens"] + result["output_tokens"]
+        assert result["finish_reason"] == "STOP"
+        assert result["error"] == ""
+
+    def test_repeatability_across_runs(self):
+        provider = DeterministicMockProvider()
+        r1 = provider.generate("Summarise this article in three bullet points.", temperature=0.2)
+        r2 = provider.generate("Summarise this article in three bullet points.", temperature=0.2)
+        assert r1 == r2
+
+    def test_different_inputs_produce_different_signatures(self):
+        provider = DeterministicMockProvider()
+        r1 = provider.generate("First prompt question")
+        r2 = provider.generate("Second distinct prompt question")
+        assert r1["text"] != r2["text"]
+
+    def test_custom_canned_responses_exact_and_substring(self):
+        provider = DeterministicMockProvider(
+            responses={
+                "What is 2+2?": "4",
+                "Battle of Veloria": "I cannot verify this event exists.",
+            }
+        )
+        exact = provider.generate("What is 2+2?")
+        assert exact["text"] == "4"
+
+        sub = provider.generate("Tell me about the Battle of Veloria in 1847.")
+        assert sub["text"] == "I cannot verify this event exists."
+
+    def test_empty_and_whitespace_prompts_fail_cleanly(self):
+        provider = DeterministicMockProvider()
+        for bad_prompt in ("", "   \n\t  "):
+            res = provider.generate(bad_prompt)
+            assert res["success"] is False
+            assert "empty" in res["error"].lower()
+
+    def test_simulated_errors_classified_compatibly(self):
+        quota_provider = DeterministicMockProvider(simulate_error="429 resource_exhausted quota")
+        res_quota = quota_provider.generate("Hello")
+        assert res_quota["success"] is False
+        assert "quota" in res_quota["error"].lower() or "rate limit" in res_quota["error"].lower()
+
+        timeout_provider = DeterministicMockProvider(simulate_error="Request deadline timeout")
+        res_timeout = timeout_provider.generate("Hello")
+        assert res_timeout["success"] is False
+        assert "timeout" in res_timeout["error"].lower() or "timed out" in res_timeout["error"].lower()
+
+    def test_max_tokens_truncation_sets_finish_reason(self):
+        provider = DeterministicMockProvider()
+        res = provider.generate("Explain black holes in detail.", max_tokens=4)
+        assert res["success"] is True
+        assert res["finish_reason"] == "MAX_TOKENS"
+        assert res["output_tokens"] == 4
+        assert len(res["text"].split()) == 4
+
+    def test_compatibility_with_evaluator_and_llm_judge(self):
+        from src.evaluator import ResponseEvaluator, llm_judge_score
+
+        provider = DeterministicMockProvider()
+        evaluator = ResponseEvaluator()
+
+        res = provider.generate(
+            "Return only a raw JSON array with no markdown formatting.",
+        )
+        scores = evaluator.evaluate(
+            result=res,
+            prompt_text=res["prompt"],
+            requested_format="json",
+            key_instructions=["Python"],
+        )
+        assert scores["api_success"]["value"] is True
+        assert scores["format_adherence"]["value"] is True
+        assert scores["instruction_keyword_adherence"]["value"] == 1.0
+
+        judge = llm_judge_score(
+            llm_client=provider,
+            response_text=res["text"],
+            original_prompt=res["prompt"],
+        )
+        assert judge["score"] == 4
+        assert "Deterministic mock judge" in judge["explanation"]
