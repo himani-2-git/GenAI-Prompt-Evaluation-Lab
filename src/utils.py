@@ -280,11 +280,13 @@ def build_experiment_record(
     return {
         "id": str(uuid.uuid4())[:8],
         "saved_at": utc_now(),
+        "dataset_schema_version": test_case.get("schema_version", DATASET_SCHEMA_VERSION),
         "test_case_id": test_case.get("id", ""),
         "test_case_name": test_case.get("name", ""),
         "category": test_case.get("category", ""),
         "prompt_version": prompt_version,
         "prompt_text": prompt_text,
+        "provider": llm_result.get("provider", "gemini"),
         "model": llm_result.get("model", ""),
         "temperature": model_params.get("temperature"),
         "max_tokens": model_params.get("max_tokens"),
@@ -298,3 +300,229 @@ def build_experiment_record(
         "finish_reason": llm_result.get("finish_reason", ""),
         "scores": scores,
     }
+
+
+# ─── Dataset schema & validation (Phase 2) ────────────────────────────────────
+
+DATASET_SCHEMA_VERSION = "1.0"
+SUPPORTED_DATASET_SCHEMA_VERSIONS = {"1.0"}
+DEFAULT_DATASET_PATH = _PROJECT_ROOT / "test_cases" / "sample_cases.json"
+VALID_EXPECTED_BEHAVIORS = {"answer", "refuse", "abstain", "clarify"}
+
+
+class DatasetValidationError(ValueError):
+    """Raised when a dataset or test case fails schema validation."""
+
+
+def validate_test_case(
+    case: Any,
+    *,
+    default_schema_version: str = DATASET_SCHEMA_VERSION,
+) -> dict[str, Any]:
+    """
+    Validate a single test-case dictionary against the dataset schema.
+
+    Preserves backward compatibility with legacy test cases that omit
+    `schema_version` or `evaluation_criteria` by normalizing defaults,
+    while strictly validating all required fields and types.
+    """
+    if not isinstance(case, dict):
+        raise DatasetValidationError(
+            f"Test case must be a dict, got {type(case).__name__}."
+        )
+
+    # 1. Schema version check
+    raw_version = case.get("schema_version", default_schema_version)
+    if not isinstance(raw_version, str) or raw_version not in SUPPORTED_DATASET_SCHEMA_VERSIONS:
+        raise DatasetValidationError(
+            f"Unsupported test-case schema_version '{raw_version}'. "
+            f"Supported versions: {sorted(SUPPORTED_DATASET_SCHEMA_VERSIONS)}"
+        )
+
+    # 2. Required non-empty string fields
+    required_str_fields = ("id", "name", "category", "description", "problem_statement")
+    for field in required_str_fields:
+        val = case.get(field)
+        if not isinstance(val, str) or not val.strip():
+            raise DatasetValidationError(
+                f"Test case missing or invalid required string field '{field}'."
+            )
+
+    case_id = case["id"].strip()
+    if not re.match(r"^[a-z0-9_]+$", case_id):
+        raise DatasetValidationError(
+            f"Test case id '{case_id}' must be lowercase alphanumeric + underscores."
+        )
+
+    # 3. Validate prompts map
+    prompts = case.get("prompts")
+    if not isinstance(prompts, dict) or not prompts:
+        raise DatasetValidationError(
+            f"Test case '{case_id}' must contain a non-empty 'prompts' dictionary."
+        )
+    if "v1" not in prompts:
+        raise DatasetValidationError(
+            f"Test case '{case_id}' must include at least baseline prompt version 'v1'."
+        )
+
+    for ver_key, pdata in prompts.items():
+        if not isinstance(ver_key, str) or not re.match(r"^v\d+$", ver_key):
+            raise DatasetValidationError(
+                f"Test case '{case_id}' has invalid prompt version key '{ver_key}' "
+                "(expected 'v1', 'v2', ...)."
+            )
+        if not isinstance(pdata, dict):
+            raise DatasetValidationError(
+                f"Test case '{case_id}' prompt '{ver_key}' must be a dict."
+            )
+        ptext = pdata.get("text")
+        if not isinstance(ptext, str) or not ptext.strip():
+            raise DatasetValidationError(
+                f"Test case '{case_id}' prompt '{ver_key}' must have a non-empty 'text' string."
+            )
+        for meta_field in ("rationale", "failure_mode"):
+            mval = pdata.get(meta_field)
+            if not isinstance(mval, str):
+                raise DatasetValidationError(
+                    f"Test case '{case_id}' prompt '{ver_key}' missing string field '{meta_field}'."
+                )
+
+    # 4. Validate optional fields when present
+    for nullable_str_field in ("reference_answer", "context"):
+        if nullable_str_field in case and case[nullable_str_field] is not None:
+            if not isinstance(case[nullable_str_field], str):
+                raise DatasetValidationError(
+                    f"Test case '{case_id}' field '{nullable_str_field}' must be a string or null."
+                )
+
+    if "tags" in case and case["tags"] is not None:
+        tags = case["tags"]
+        if not isinstance(tags, list) or not all(isinstance(t, str) for t in tags):
+            raise DatasetValidationError(
+                f"Test case '{case_id}' field 'tags' must be a list of strings."
+            )
+
+    if "user_question_variants" in case and case["user_question_variants"] is not None:
+        variants = case["user_question_variants"]
+        if (
+            not isinstance(variants, list)
+            or len(variants) == 0
+            or not all(isinstance(v, str) and v.strip() for v in variants)
+        ):
+            raise DatasetValidationError(
+                f"Test case '{case_id}' field 'user_question_variants' must be a non-empty list of non-empty strings."
+            )
+
+    if "evaluation_criteria" in case and case["evaluation_criteria"] is not None:
+        criteria = case["evaluation_criteria"]
+        if not isinstance(criteria, dict):
+            raise DatasetValidationError(
+                f"Test case '{case_id}' field 'evaluation_criteria' must be a dict."
+            )
+        exp_behavior = criteria.get("expected_behavior")
+        if exp_behavior is not None and exp_behavior not in VALID_EXPECTED_BEHAVIORS:
+            raise DatasetValidationError(
+                f"Test case '{case_id}' has invalid expected_behavior '{exp_behavior}'. "
+                f"Allowed: {sorted(VALID_EXPECTED_BEHAVIORS)}"
+            )
+        req_keys = criteria.get("required_json_keys")
+        if req_keys is not None and (
+            not isinstance(req_keys, list) or not all(isinstance(k, str) for k in req_keys)
+        ):
+            raise DatasetValidationError(
+                f"Test case '{case_id}' evaluation_criteria.required_json_keys must be a list of strings."
+            )
+        max_words = criteria.get("max_words")
+        if max_words is not None and (not isinstance(max_words, int) or isinstance(max_words, bool) or max_words <= 0):
+            raise DatasetValidationError(
+                f"Test case '{case_id}' evaluation_criteria.max_words must be a positive integer."
+            )
+
+    normalized = dict(case)
+    normalized["schema_version"] = raw_version
+    return normalized
+
+
+def validate_dataset(raw_data: Any) -> dict[str, Any]:
+    """
+    Validate a dataset structure (either a versioned envelope dict or a
+    backward-compatible list of test-case dicts) and return a normalized
+    dataset dictionary with `schema_version` and `cases`.
+    """
+    if isinstance(raw_data, dict):
+        if "schema_version" not in raw_data:
+            raise DatasetValidationError(
+                "Dataset envelope is missing required 'schema_version' field."
+            )
+        schema_version = raw_data["schema_version"]
+        if (
+            not isinstance(schema_version, str)
+            or schema_version not in SUPPORTED_DATASET_SCHEMA_VERSIONS
+        ):
+            raise DatasetValidationError(
+                f"Unsupported dataset schema_version '{schema_version}'. "
+                f"Supported versions: {sorted(SUPPORTED_DATASET_SCHEMA_VERSIONS)}"
+            )
+        raw_cases = raw_data.get("cases")
+        if not isinstance(raw_cases, list) or len(raw_cases) == 0:
+            raise DatasetValidationError(
+                "Dataset envelope must contain a non-empty 'cases' list."
+            )
+        dataset_id = str(raw_data.get("dataset_id", "default_dataset"))
+        name = str(raw_data.get("name", "Prompt Evaluation Dataset"))
+        description = str(raw_data.get("description", ""))
+    elif isinstance(raw_data, list):
+        if len(raw_data) == 0:
+            raise DatasetValidationError("Dataset case list cannot be empty.")
+        schema_version = DATASET_SCHEMA_VERSION
+        raw_cases = raw_data
+        dataset_id = "sample_cases"
+        name = "GenAI Prompt Evaluation Lab Benchmark Cases"
+        description = "Standard prompt-engineering evaluation dataset (flat-list compatible)."
+    else:
+        raise DatasetValidationError(
+            f"Dataset must be a JSON object (envelope) or list of test cases, got {type(raw_data).__name__}."
+        )
+
+    validated_cases: list[dict[str, Any]] = []
+    seen_ids: set[str] = set()
+    for idx, item in enumerate(raw_cases):
+        tc = validate_test_case(item, default_schema_version=schema_version)
+        tc_id = tc["id"]
+        if tc_id in seen_ids:
+            raise DatasetValidationError(
+                f"Duplicate test case id '{tc_id}' at index {idx}."
+            )
+        seen_ids.add(tc_id)
+        validated_cases.append(tc)
+
+    return {
+        "schema_version": schema_version,
+        "dataset_id": dataset_id,
+        "name": name,
+        "description": description,
+        "cases": validated_cases,
+    }
+
+
+def load_dataset(path: Path | None = None) -> dict[str, Any]:
+    """
+    Load and validate a dataset JSON file from disk.
+    Returns the normalized dataset dict with keys:
+    `schema_version`, `dataset_id`, `name`, `description`, `cases`.
+    """
+    target = path or DEFAULT_DATASET_PATH
+    if not target.exists():
+        raise DatasetValidationError(f"Dataset file not found: {target}")
+    try:
+        raw = json.loads(target.read_text(encoding="utf-8"))
+    except json.JSONDecodeError as exc:
+        raise DatasetValidationError(f"Invalid JSON in dataset file {target}: {exc}") from exc
+    return validate_dataset(raw)
+
+
+def load_test_cases_validated(path: Path | None = None) -> list[dict[str, Any]]:
+    """
+    Load and validate test cases from disk, returning the list of test-case dicts.
+    """
+    return load_dataset(path)["cases"]
