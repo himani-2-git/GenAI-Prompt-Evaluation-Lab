@@ -28,7 +28,12 @@ import streamlit as st
 # ─── Make src importable ──────────────────────────────────────────────────────
 sys.path.insert(0, str(Path(__file__).parent))
 
-from src.evaluator import FailureCase, ResponseEvaluator, llm_judge_score
+from src.evaluator import (
+    FailureCase,
+    ResponseEvaluator,
+    get_boolean_metric_icon,
+    llm_judge_score,
+)
 from src.llm_client import GeminiClient, SUPPORTED_MODELS
 from src.utils import (
     build_experiment_record,
@@ -227,6 +232,9 @@ if PAGE == "🚀 Run Experiment":
                         reference_answer=selected_tc.get("reference_answer"),
                         requested_format=selected_tc.get(f"requested_format_{v}"),
                         key_instructions=selected_tc.get(f"key_instructions_{v}"),
+                        evaluation_criteria=selected_tc.get("evaluation_criteria"),
+                        test_case=selected_tc,
+                        prompt_version=v,
                     )
 
                     # Build and save record
@@ -581,11 +589,15 @@ elif PAGE == "🔍 Evaluate":
         # ── Heuristic metrics ──────────────────────────────────────────────
         st.markdown("#### 🔎 Heuristic Metrics *(rule-based — not objective truth)*")
         heuristic_keys = [
+            "criteria_passed",
+            "failure_category",
             "potential_refusal",
             "potential_hallucination_risk",
             "safety_concern_flagged",
             "instruction_keyword_adherence",
             "format_adherence",
+            "json_schema_valid",
+            "word_limit_adherence",
         ]
         for k in heuristic_keys:
             if k in scores:
@@ -594,12 +606,15 @@ elif PAGE == "🔍 Evaluate":
                 label = m["label"]
                 explanation = m["explanation"]
                 if isinstance(val, bool):
-                    icon = "⚠️" if val else "✅"
+                    icon = get_boolean_metric_icon(k, val)
                     st.markdown(f"**{icon} {k.replace('_', ' ').title()}** `{label}`")
                 elif isinstance(val, float):
                     pct = f"{val:.0%}"
                     icon = "✅" if val >= 0.7 else "⚠️" if val >= 0.4 else "❌"
                     st.markdown(f"**{icon} {k.replace('_', ' ').title()}** `{label}` → `{pct}`")
+                elif k == "failure_category":
+                    icon = "✅" if val == "none" else "❌"
+                    st.markdown(f"**{icon} {k.replace('_', ' ').title()}** `{label}` → `{val}`")
                 else:
                     st.markdown(f"**{k.replace('_', ' ').title()}** `{label}` → `{val}`")
                 st.caption(explanation)

@@ -50,10 +50,17 @@
     "key_instructions_v3": ["valid JSON", "array", "objects", "name", "language", "use_case", "no markdown", "no explanation"],
     "requested_format_v1": "json",
     "requested_format_v2": "json",
-    "requested_format_v3": "json",
+    "requested_format_v3": "raw_json",
     "evaluation_criteria": {
       "expected_behavior": "answer",
-      "required_json_keys": ["name", "language", "use_case"]
+      "expected_root_type": "array",
+      "required_json_keys": ["name", "language", "use_case"],
+      "field_types": {
+        "name": "string",
+        "language": "string",
+        "use_case": "string"
+      },
+      "allow_empty_array": false
     },
     "prompts": {
       "v1": {
@@ -356,10 +363,16 @@
     "key_instructions_v3": ["raw JSON", "no markdown", "service", "status_code", "latency_ms", "null"],
     "requested_format_v1": "json",
     "requested_format_v2": "json",
-    "requested_format_v3": "json",
+    "requested_format_v3": "raw_json",
     "evaluation_criteria": {
       "expected_behavior": "answer",
-      "required_json_keys": ["service", "status_code", "latency_ms"]
+      "expected_root_type": "object",
+      "required_json_keys": ["service", "status_code", "latency_ms"],
+      "field_types": {
+        "service": "string",
+        "status_code": ["integer", "null"],
+        "latency_ms": ["number", "null"]
+      }
     },
     "prompts": {
       "v1": {
@@ -432,9 +445,11 @@
     "key_instructions_v3": ["raw JSON array", "[]", "no prose", "do not invent"],
     "requested_format_v1": "json",
     "requested_format_v2": "json",
-    "requested_format_v3": "json",
+    "requested_format_v3": "raw_json",
     "evaluation_criteria": {
       "expected_behavior": "answer",
+      "expected_root_type": "array",
+      "allow_empty_array": true,
       "max_words": 15
     },
     "prompts": {

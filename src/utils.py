@@ -308,10 +308,36 @@ DATASET_SCHEMA_VERSION = "1.0"
 SUPPORTED_DATASET_SCHEMA_VERSIONS = {"1.0"}
 DEFAULT_DATASET_PATH = _PROJECT_ROOT / "test_cases" / "sample_cases.json"
 VALID_EXPECTED_BEHAVIORS = {"answer", "refuse", "abstain", "clarify"}
+VALID_JSON_ROOT_TYPES = {"object", "array", "dict", "list"}
+VALID_JSON_FIELD_TYPES = {
+    "string",
+    "str",
+    "integer",
+    "int",
+    "float",
+    "number",
+    "numeric",
+    "boolean",
+    "bool",
+    "array",
+    "list",
+    "object",
+    "dict",
+    "null",
+    "none",
+}
 
 
 class DatasetValidationError(ValueError):
     """Raised when a dataset or test case fails schema validation."""
+
+
+def _is_valid_field_type_spec(spec: Any) -> bool:
+    if isinstance(spec, str):
+        return spec.strip().lower() in VALID_JSON_FIELD_TYPES
+    if isinstance(spec, list) and len(spec) > 0:
+        return all(isinstance(s, str) and s.strip().lower() in VALID_JSON_FIELD_TYPES for s in spec)
+    return False
 
 
 def validate_test_case(
@@ -432,6 +458,29 @@ def validate_test_case(
             raise DatasetValidationError(
                 f"Test case '{case_id}' evaluation_criteria.required_json_keys must be a list of strings."
             )
+        root_type = criteria.get("expected_root_type")
+        if root_type is not None and (
+            not isinstance(root_type, str) or root_type.strip().lower() not in VALID_JSON_ROOT_TYPES
+        ):
+            raise DatasetValidationError(
+                f"Test case '{case_id}' evaluation_criteria.expected_root_type must be one of "
+                f"{sorted(VALID_JSON_ROOT_TYPES)}, got {root_type!r}."
+            )
+        field_types = criteria.get("field_types")
+        if field_types is not None:
+            if not isinstance(field_types, dict) or not all(
+                isinstance(k, str) and k.strip() and _is_valid_field_type_spec(v)
+                for k, v in field_types.items()
+            ):
+                raise DatasetValidationError(
+                    f"Test case '{case_id}' evaluation_criteria.field_types must map field names to valid type specs."
+                )
+        for bool_crit_field in ("allow_markdown_fences", "allow_empty_array"):
+            if bool_crit_field in criteria and criteria[bool_crit_field] is not None:
+                if not isinstance(criteria[bool_crit_field], bool):
+                    raise DatasetValidationError(
+                        f"Test case '{case_id}' evaluation_criteria.{bool_crit_field} must be a boolean."
+                    )
         max_words = criteria.get("max_words")
         if max_words is not None and (not isinstance(max_words, int) or isinstance(max_words, bool) or max_words <= 0):
             raise DatasetValidationError(
