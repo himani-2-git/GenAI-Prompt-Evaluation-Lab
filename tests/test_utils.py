@@ -398,6 +398,26 @@ class TestDatasetValidationErrors:
         with pytest.raises(DatasetValidationError, match="required_json_keys must be a list of strings"):
             validate_test_case(bad_case3)
 
+        bad_case4 = _make_valid_case()
+        bad_case4["evaluation_criteria"] = {"expected_root_type": "scalar"}
+        with pytest.raises(DatasetValidationError, match="expected_root_type must be one of"):
+            validate_test_case(bad_case4)
+
+        bad_case5 = _make_valid_case()
+        bad_case5["evaluation_criteria"] = {"field_types": {"status": "invalid_type"}}
+        with pytest.raises(DatasetValidationError, match="field_types must map field names to valid type specs"):
+            validate_test_case(bad_case5)
+
+        bad_case6 = _make_valid_case()
+        bad_case6["evaluation_criteria"] = {"allow_markdown_fences": "no"}
+        with pytest.raises(DatasetValidationError, match="allow_markdown_fences must be a boolean"):
+            validate_test_case(bad_case6)
+
+        bad_case7 = _make_valid_case()
+        bad_case7["evaluation_criteria"] = {"allow_empty_array": "yes"}
+        with pytest.raises(DatasetValidationError, match="allow_empty_array must be a boolean"):
+            validate_test_case(bad_case7)
+
     def test_invalid_user_question_variants_raises(self):
         bad_case = _make_valid_case()
         bad_case["user_question_variants"] = []
