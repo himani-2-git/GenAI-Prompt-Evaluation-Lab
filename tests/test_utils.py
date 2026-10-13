@@ -37,6 +37,7 @@ from src.utils import (
     load_experiment,
     load_failure_cases,
     load_test_cases_validated,
+    render_prompt,
     save_experiment,
     save_failure_case,
     truncate,
@@ -159,6 +160,33 @@ class TestCompareAndHelpers:
         assert friendly_timestamp("not-a-date") == "not-a-date"
         assert truncate("short", max_chars=10) == "short"
         assert truncate("hello world extra text", max_chars=11).endswith("…")
+
+    def test_render_prompt_matches_app_py_substitution_across_all_cases(self):
+        cases = load_test_cases_validated()
+        for tc in cases:
+            for v, pdata in tc["prompts"].items():
+                prompt_text = pdata["text"]
+                ctx = tc.get("context") or ""
+                uq = (tc.get("user_question_variants") or [""])[0]
+                expected = prompt_text.replace("{context}", ctx).replace(
+                    "{user_question}", uq
+                )
+                assert render_prompt(tc, v) == expected
+
+        # Verify question_variant_index selection on prompt_robustness
+        robustness_tc = next(tc for tc in cases if tc["id"] == "prompt_robustness")
+        second_variant = robustness_tc["user_question_variants"][1]
+        assert second_variant in render_prompt(
+            robustness_tc, "v2", question_variant_index=1
+        )
+        # Out-of-range index falls back to index 0 cleanly
+        assert render_prompt(
+            robustness_tc, "v2", question_variant_index=99
+        ) == render_prompt(robustness_tc, "v2", question_variant_index=0)
+
+        # Unknown prompt version raises KeyError
+        with pytest.raises(KeyError, match="Prompt version 'v99'"):
+            render_prompt(robustness_tc, "v99")
 
 
 # ─── Phase 2: Dataset Schema & Validation Tests ───────────────────────────────

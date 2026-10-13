@@ -225,8 +225,11 @@ class ResponseEvaluator:
             if evaluation_criteria is None:
                 evaluation_criteria = test_case.get("evaluation_criteria")
             if not prompt_text:
+                ver_entry = (test_case.get("prompts") or {}).get(ver)
                 prompt_text = (
-                    test_case.get("prompts", {}).get(ver, {}).get("text", "")
+                    str(ver_entry.get("text") or "")
+                    if isinstance(ver_entry, dict)
+                    else ""
                 )
 
         text = result.get("text", "") or ""
@@ -264,6 +267,20 @@ class ResponseEvaluator:
             eff_allow_fences = criteria.get("allow_markdown_fences", True)
 
         max_words = criteria.get("max_words")
+        has_schema_constraints = (
+            eff_required_keys is not None
+            or eff_field_types is not None
+            or eff_root_type is not None
+            or allow_empty_array is not None
+            or "allow_empty_array" in criteria
+        )
+        should_classify = (
+            evaluation_criteria is not None
+            or test_case is not None
+            or has_schema_constraints
+            or allow_markdown_fences is not None
+            or is_raw_json_format
+        )
 
         # ── Objective metrics ─────────────────────────────────────────────────
         scores["response_not_empty"] = _metric(
@@ -314,6 +331,52 @@ class ResponseEvaluator:
             )
 
         if not success or not text.strip():
+            fail_reason = (
+                f"API call failed ({result.get('error') or 'unknown error'})"
+                if not success
+                else "Response is empty or whitespace-only"
+            )
+            if max_words is not None:
+                scores["word_limit_adherence"] = _metric(
+                    OBJECTIVE,
+                    False,
+                    f"{fail_reason}; word limit (<= {max_words} words) not satisfied.",
+                )
+            if requested_format:
+                scores["format_adherence"] = _metric(
+                    HEURISTIC,
+                    False,
+                    f"Format check for '{requested_format}': {fail_reason}.",
+                )
+            if has_schema_constraints:
+                scores["json_schema_valid"] = _metric(
+                    OBJECTIVE,
+                    False,
+                    f"{fail_reason}; JSON schema constraints not satisfied.",
+                )
+            if should_classify:
+                classification = classify_failure(
+                    result=result,
+                    requested_format=requested_format,
+                    required_json_keys=eff_required_keys,
+                    json_field_types=eff_field_types,
+                    expected_root_type=eff_root_type,
+                    allow_markdown_fences=eff_allow_fences,
+                    allow_empty_array=eff_allow_empty_array,
+                    key_instructions=key_instructions,
+                    evaluation_criteria=criteria,
+                )
+                reason_summary = "; ".join(classification["reasons"])
+                scores["criteria_passed"] = _metric(
+                    OBJECTIVE,
+                    classification["passed"],
+                    reason_summary,
+                )
+                scores["failure_category"] = _metric(
+                    HEURISTIC,
+                    classification["primary_category"],
+                    reason_summary,
+                )
             return scores  # Nothing more to evaluate on an empty/failed response
 
         if max_words is not None:
@@ -379,13 +442,6 @@ class ResponseEvaluator:
                 f"Format check for '{requested_format}': {fmt_detail}",
             )
 
-        has_schema_constraints = (
-            eff_required_keys is not None
-            or eff_field_types is not None
-            or eff_root_type is not None
-            or allow_empty_array is not None
-            or "allow_empty_array" in criteria
-        )
         if has_schema_constraints:
             json_val = validate_json_output(
                 text,
@@ -405,12 +461,7 @@ class ResponseEvaluator:
                 schema_explanation,
             )
 
-        if (
-            evaluation_criteria is not None
-            or has_schema_constraints
-            or allow_markdown_fences is not None
-            or is_raw_json_format
-        ):
+        if should_classify:
             classification = classify_failure(
                 result=result,
                 requested_format=requested_format,

@@ -264,6 +264,35 @@ def truncate(text: str, max_chars: int = 120) -> str:
     return text[:max_chars].rstrip() + "…"
 
 
+def render_prompt(
+    test_case: dict[str, Any],
+    prompt_version: str,
+    *,
+    question_variant_index: int = 0,
+) -> str:
+    """
+    Render a benchmark test case's prompt template for a given prompt version,
+    substituting ``{context}`` and ``{user_question}`` placeholders identically
+    to the Streamlit execution flow in ``app.py``.
+
+    Raises ``KeyError`` if ``prompt_version`` is not present in ``test_case["prompts"]``.
+    """
+    prompts = test_case.get("prompts") or {}
+    if prompt_version not in prompts:
+        case_id = test_case.get("id", "<unknown>")
+        raise KeyError(
+            f"Prompt version '{prompt_version}' not found in test case '{case_id}'."
+        )
+    prompt_text = prompts[prompt_version].get("text", "")
+    ctx = test_case.get("context") or ""
+    variants = test_case.get("user_question_variants") or [""]
+    if 0 <= question_variant_index < len(variants):
+        uq = variants[question_variant_index]
+    else:
+        uq = variants[0] if variants else ""
+    return prompt_text.replace("{context}", ctx).replace("{user_question}", uq)
+
+
 def build_experiment_record(
     test_case: dict[str, Any],
     prompt_version: str,
