@@ -6,6 +6,7 @@ A Python and Streamlit dashboard for evaluating LLM prompts, measuring outputs a
 ![Streamlit](https://img.shields.io/badge/Streamlit-1.39%2B-FF4B4B?logo=streamlit&logoColor=white)
 ![Gemini API](https://img.shields.io/badge/Gemini%20API-google--genai-4285F4?logo=google&logoColor=white)
 ![Tests: 229 passed](https://img.shields.io/badge/Tests-229%20passed-brightgreen?logo=pytest&logoColor=white)
+[![CI](https://github.com/himani-2-git/GenAI-Prompt-Evaluation-Lab/actions/workflows/ci.yml/badge.svg)](https://github.com/himani-2-git/GenAI-Prompt-Evaluation-Lab/actions/workflows/ci.yml)
 ![MIT License](https://img.shields.io/badge/License-MIT-yellow)
 
 ## 🎬 Demo
@@ -285,10 +286,26 @@ From the repository root:
 - `tests/test_prompt_manager.py` (27 tests) — Prompt version CRUD, metadata validation, and inline registry.
 - `tests/test_api_connection.py` (1 test) — Guarded connection smoke-test (mocked under pytest; live network call only executed when run directly as a script).
 
+### Continuous Integration (GitHub Actions)
+
+This repository includes an automated CI workflow defined in [`.github/workflows/ci.yml`](.github/workflows/ci.yml):
+
+- **Triggers:** Automatically runs on every `push` to `main` and on `pull_request` events targeting `main`.
+- **Environment:** Ubuntu runner on Python 3.11 with pip dependency caching.
+- **Scope & Safety:** Executes the full 229-test automated suite completely offline. Normal CI execution requires no API keys or external secrets and makes zero external network calls.
+- **Workflow Results:** Run statuses and step logs are visible under the **[Actions tab](https://github.com/himani-2-git/GenAI-Prompt-Evaluation-Lab/actions)** on GitHub.
+- **Local Reproduction:** Run the exact test command from the repository root:
+  ```powershell
+  .\venv\Scripts\pytest -v
+  ```
+
 ## 📁 Project Structure
 
 ```text
 GenAI-Prompt-Evaluation-Lab/
+├── .github/
+│   └── workflows/
+│       └── ci.yml                 # Automated GitHub Actions test workflow
 ├── app.py                         # Streamlit workbench: seven pages
 ├── README.md                      # Project documentation and visual portfolio
 ├── QUICKSTART.md                  # Quickstart command reference
