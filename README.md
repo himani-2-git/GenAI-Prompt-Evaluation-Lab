@@ -1,11 +1,11 @@
 # GenAI Prompt Evaluation Lab
 
-A Python and Streamlit dashboard for comparing Gemini prompts, measuring their outputs, and documenting what changed and why.
+A Python and Streamlit dashboard for evaluating LLM prompts, measuring outputs across objective, grounded, and heuristic dimensions, comparing prompt versions systematically, and documenting failures and fixes.
 
 ![Python](https://img.shields.io/badge/Python-3.10%2B-blue?logo=python&logoColor=white)
 ![Streamlit](https://img.shields.io/badge/Streamlit-1.39%2B-FF4B4B?logo=streamlit&logoColor=white)
 ![Gemini API](https://img.shields.io/badge/Gemini%20API-google--genai-4285F4?logo=google&logoColor=white)
-![Tests: 117 passed](https://img.shields.io/badge/Tests-117%20passed-brightgreen?logo=pytest&logoColor=white)
+![Tests: 229 passed](https://img.shields.io/badge/Tests-229%20passed-brightgreen?logo=pytest&logoColor=white)
 ![MIT License](https://img.shields.io/badge/License-MIT-yellow)
 
 ## 🎬 Demo
@@ -14,13 +14,23 @@ A Python and Streamlit dashboard for comparing Gemini prompts, measuring their o
 
 *Custom Prompt in action: the opening of V1's long black-hole explanation sits beside the complete V2 response. Comparing actual outputs makes the effect of length and audience instructions visible.*
 
-The screenshots show real API responses, captured on 27 September 2026. The final black-hole capture uses `gemini-flash-lite-latest`, temperature `0.7`, and a `1024` max-output-token setting. Flash Latest returned temporary high-demand errors, and Gemini 2.5 Flash was unavailable to this account during capture; the app's existing Flash Lite option succeeded. The default model in the code remains `gemini-flash-latest`.
+The screenshots show real API responses captured during development. The black-hole capture uses `gemini-flash-lite-latest`, temperature `0.7`, and a `1024` max-output-token setting. The app also includes an offline **Deterministic Mock Provider** (`provider=mock`) allowing full workbench and batch evaluation workflows without network access or an API key.
 
 For copy-paste setup help, see [QUICKSTART.md](QUICKSTART.md).
 
 ## ✨ What This Project Does
 
-Write a vague prompt and a more specific version, send both to Google Gemini, and compare the actual answers. The dashboard measures response length, token usage, latency, and finish reason, while labelling quality checks by the method used. Eight preset cases support a workflow of running, evaluating, revising, and documenting prompts; their results are saved locally and can be exported to CSV. A failure log records what went wrong, the likely root cause, and the proposed fix so prompt changes have a documented rationale.
+Write a baseline prompt (V1) and improved iterations (V2/V3), execute them against Google Gemini or the offline deterministic mock provider, and evaluate their outputs systematically:
+
+- **Dual Provider Architecture:** Run live against Google Gemini via the `google-genai` SDK or completely offline via `DeterministicMockProvider` for reproducible pipeline testing.
+- **12 Validated Benchmark Test Cases:** Versioned test cases (Schema 1.0) spanning ambiguity, structured JSON, grounding, conflicting instructions, hallucination, safety, prompt robustness, unanswerable contexts, malformed inputs, prompt injection, and empty-state boundary conditions.
+- **Multi-Version Prompting:** Run V1, V2, and V3 side by side with full prompt rationales and expected failure modes.
+- **Objective, Grounded & Heuristic Evaluation:** Metrics clearly labelled by epistemic certainty (`[OBJECTIVE]`, `[GROUNDED]`, `[HEURISTIC]`, `[LLM-JUDGE]`).
+- **Deterministic Validation:** Objective checks for JSON syntax, markdown fence bans, required schema keys, value types, word limits, and behavioral criteria.
+- **Automated Failure Classification:** Deterministic failure taxonomy (`api_error`, `malformed_json`, `fenced_json`, `missing_required_keys`, `wrong_value_types`, `missed_refusal`, `length_violation`, etc.).
+- **Batch Evaluation & Matched Comparisons:** Multi-case batch runner executing across versions, computing fair matched-case comparisons under identical parameters with explicit applicability denominators.
+- **Markdown Evaluation Reports:** Generate, preview, download, and save human-readable Markdown evaluation reports directly from batch results without rerunning providers.
+- **Local Persistence & Export:** Individual experiment records saved to JSON in `experiments/`, failure case logging in `experiments/failure_cases.json`, and CSV export.
 
 ## 🧪 The Core Experiment
 
@@ -46,8 +56,6 @@ Both versions ask about the same topic. V2 adds a sentence limit and a target re
 | Word count | 261 | 51 |
 | Finish reason | `MAX_TOKENS` — cut off | `STOP` — complete |
 
-That earlier result is retained as the project's original example. It is **not** the run shown in the new screenshots; exact outputs vary with model and sampling.
-
 **Fresh run shown in the screenshots:**
 
 | Metric | V1: vague | V2: specific |
@@ -70,99 +78,118 @@ In this run, V2 used about **93% fewer words**, **91% fewer total tokens**, and 
 
 ## 🗺️ App Pages
 
+The Streamlit workbench is organized into seven pages in the sidebar:
+
 ### 1. 🚀 Run Experiment
-
-<img src="docs/screenshots/02_run_experiment.png" width="700" alt="Run Experiment page with the Ambiguous Instruction test case expanded and model parameters visible"/>
-
-*Choose a preset case, inspect its problem and context, and configure model parameters. Prompt versions include rationales and expected failure modes so each run tests a specific change.*
+Select any of the 12 benchmark cases, choose paraphrased question variants if defined, configure model parameters, select prompt versions (V1/V2/V3), and execute them against the selected provider. Displays prompt rationales, rendered previews, and outputs.
 
 ### 2. ✏️ Custom Prompt
-
-<img src="docs/screenshots/03_custom_prompt.png" width="700" alt="Custom Prompt page with the vague and specific black-hole prompts filled in"/>
-
-*Enter two versions of any task and optional context. The filled black-hole example shows how audience and length constraints can be tested with the same model settings.*
-
-<img src="docs/screenshots/04_results_sidebyside.png" width="700" alt="Custom Prompt side-by-side results for the black-hole experiment"/>
-
-*Read both responses together: the V1 excerpt is expansive, while V2 is complete and short. This view exposes differences that a single score would miss.*
-
-<img src="docs/screenshots/05_comparison_table.png" width="700" alt="Custom Prompt Quick Comparison metrics table"/>
-
-*Check the quantitative tradeoffs below the answers. Finish reason distinguishes hitting a token limit from ending normally.*
+Type arbitrary custom prompts side-by-side with optional context and run them directly. Compares outputs, word counts, character counts, latency, and tokens.
 
 ### 3. 📊 Compare Outputs
-
-<img src="docs/screenshots/09_compare_outputs.png" width="700" alt="Compare Outputs page showing the preset summary versions and their prompt rationales"/>
-
-*Compare the latest preset experiment's outputs and rationales; its Quick Metrics table appears below. In this summary case, V2 is slightly longer than V1, illustrating why improvements must be assessed against the task rather than word count alone.*
+Side-by-side output comparison for the latest experiment run, displaying prompt rationales, word counts, latency, token usage, and quick metrics. Can also filter and load past saved runs from history.
 
 ### 4. 🔍 Evaluate
+Displays comprehensive evaluation scores partitioned by epistemic certainty:
+- **📏 Objective Telemetry (`[OBJECTIVE]`):** API success, length, latency, tokens, finish reason.
+- **✅ Objective Deterministic Validation (`[OBJECTIVE]`):** `criteria_passed`, `json_schema_valid`, and `word_limit_adherence` with pass/fail icons and diagnostic explanations.
+- **🔎 Heuristic Metrics (`[HEURISTIC]`):** `failure_category`, `format_adherence`, `instruction_keyword_adherence`, `potential_refusal`, `potential_hallucination_risk`, `safety_concern_flagged`.
+- **📐 Grounded Metrics (`[GROUNDED]`):** `keyword_overlap_score` (when a reference answer is provided).
+- **🤖 LLM-as-Judge (`[LLM-JUDGE]`):** Optional qualitative 1–5 scoring with explanation (disabled on failed or empty responses).
+Failed API runs remain fully visible with their diagnostic error messages.
 
-<img src="docs/screenshots/06_evaluate.png" width="700" alt="Evaluation page with OBJECTIVE, HEURISTIC, GROUNDED and LLM-JUDGE labels and measured scores"/>
+### 5. 📦 Batch Evaluation
+Multi-case batch execution and Markdown reporting:
+- Select any subset of benchmark cases and prompt versions (`v1`, `v2`, `v3`).
+- Set execution parameters (`temperature`, `max_tokens`, `system_instruction`, `question_variant_index`, and optional record persistence).
+- View **Matched-Case Prompt-Version Comparisons** restricted to cases where all requested versions ran under identical parameters.
+- View **Overall Metrics Summary** with explicit applicability denominators (`criteria_pass_rate`, `json_schema_valid_rate`, `word_limit_adherence_rate`, `format_adherence_rate`).
+- View **Failure Category Breakdown**, **Per-Case Breakdown**, and **Skipped Runs**.
+- **Markdown Report Generation:** In-app rendered preview, raw Markdown source view, download button, and disk-save control with overwrite protection—making zero additional provider calls.
 
-*Objective measurements appear alongside explicitly labelled heuristic checks. The labels and explanations make clear which values are measurements and which are approximate signals.*
+### 6. ⚠️ Failure Log
+Record and browse structured prompt engineering failure cases. Logs test case ID, prompt version, failure type from a defined taxonomy, description, root cause, fix applied, and whether the fix worked.
 
-### 5. ⚠️ Failure Log
-
-<img src="docs/screenshots/07_failure_log.png" width="700" alt="Failure Log form with an ambiguity category, jargon observation and root-cause analysis"/>
-
-*An unsaved analysis draft links the preset V1's unexplained jargon to its unspecified audience. The form captures a failure category, description, root cause, proposed fix, and whether the fix worked.*
-
-### 6. 📋 Experiment History
-
-<img src="docs/screenshots/08_history.png" width="700" alt="Experiment History table showing saved prompt versions, models, success status, word counts, latency and tokens"/>
-
-*Browse and filter saved preset runs, including unsuccessful API calls. The page also supports detailed inspection and CSV export, giving prompt experiments a reviewable record.*
-
-**Current workflow:** Custom Prompt keeps its outputs and Quick Comparison in the current session. Run Experiment populates Compare Outputs and Evaluate and saves records for History; custom runs are not automatically added to those pages.
+### 7. 📋 Experiment History
+Browse, filter, and inspect all saved experiment results. Filter by test case, version, and model. Export all saved results to CSV.
 
 ## 🏗️ Architecture
 
 ```mermaid
 flowchart TD
-    A["app.py\nStreamlit UI"] --> B["src/llm_client.py\nGemini API Wrapper"]
-    A --> C["src/evaluator.py\nEvaluation Pipeline"]
-    A --> D["src/prompt_manager.py\nPrompt CRUD"]
-    A --> E["src/utils.py\nPersistence & Export"]
+    subgraph UI ["Streamlit Workbench (app.py)"]
+        UI1["🚀 Run Experiment"]
+        UI2["✏️ Custom Prompt"]
+        UI3["📊 Compare Outputs"]
+        UI4["🔍 Evaluate"]
+        UI5["📦 Batch Evaluation"]
+        UI6["⚠️ Failure Log"]
+        UI7["📋 History & Export"]
+    end
 
-    D --> F["prompts/baseline/\n*.txt + *.meta.json"]
-    D --> G["prompts/improved/\n*.txt + *.meta.json"]
+    subgraph Providers ["Provider Layer (src/llm_client.py)"]
+        BASE["BaseLLMProvider"]
+        GEMINI["GeminiClient\n(google-genai SDK)"]
+        MOCK["DeterministicMockProvider\n(offline / reproducible)"]
+        FACTORY["create_provider()"]
+        BASE --> GEMINI
+        BASE --> MOCK
+        FACTORY --> BASE
+    end
 
-    E --> H["experiments/\n*.json results"]
-    E --> I["experiments/\nfailure_cases.json"]
+    subgraph Batch ["Batch Evaluation (src/batch_runner.py)"]
+        BRUN["run_batch_evaluation()"]
+        BAGG["aggregate_batch_results()"]
+        BREP["format_batch_markdown_report()\nsave_batch_markdown_report()"]
+        BRUN --> BAGG
+        BRUN --> BREP
+    end
 
-    B --> J["Gemini API\ngoogle-genai"]
+    subgraph Eval ["Evaluation Pipeline (src/evaluator.py)"]
+        REVAL["ResponseEvaluator"]
+        VJSON["validate_json_output()"]
+        FAIL["classify_failure()"]
+        JUDGE["llm_judge_score()"]
+        REVAL --> VJSON
+        REVAL --> FAIL
+        REVAL --> JUDGE
+    end
 
-    K["test_cases/\nsample_cases.json"] --> A
+    subgraph Data ["Dataset & Storage (src/utils.py)"]
+        LOAD["load_test_cases_validated()"]
+        RENDER["render_prompt()"]
+        STORE["save_experiment()\nload_all_experiments()\nexperiments_to_csv()"]
+        TC["test_cases/sample_cases.json\n(12 cases, Schema 1.0)"]
+        EXP["experiments/*.json\nexperiments/failure_cases.json"]
+        LOAD --> TC
+        STORE --> EXP
+    end
 
-    L["tests/\ntest_evaluator.py\ntest_prompt_manager.py\ntest_llm_client.py"] --> C
-    L --> D
-    L --> B
+    UI --> FACTORY
+    UI --> BRUN
+    UI --> REVAL
+    UI --> LOAD
+    UI --> RENDER
+    UI --> STORE
+    BRUN --> BASE
+    BRUN --> REVAL
+    BRUN --> RENDER
 ```
-
-The Streamlit entry point coordinates the Gemini wrapper, evaluation pipeline, and JSON/CSV persistence. Prompt-management utilities provide file-based version storage, while the dashboard's preset cases come from `test_cases/sample_cases.json`. The API wrapper uses the **`google-genai` SDK v2+** and returns structured results so callers can handle success, errors, tokens, latency, and finish reason consistently.
 
 ### Features
 
-- **8 pre-built test cases** covering common prompt engineering challenges
-- **Multi-version prompting** — run V1, V2, V3 in one click
-- **Side-by-side comparison** of outputs, word counts, latency, and token usage
-- **Honest evaluation** — metrics are labelled `[OBJECTIVE]`, `[HEURISTIC]`, `[GROUNDED]`, or `[LLM-JUDGE]`
-- **Failure case log** — structured records with failure type, root cause, and fix
-- **Experiment history** — preset experiment runs saved to JSON, exportable to CSV
-- **Parameter experimentation** — control temperature and max tokens with explanations
-- **LLM-as-judge** — optional qualitative scoring (clearly labelled as non-deterministic)
-- **No fabricated results** — every score comes from a real computation or real API call
-
-### Prompt development workflow
-
-```text
-Design a prompt → Run against Gemini → Inspect the actual output
-       → Evaluate → Identify failure modes → Improve the prompt
-       → Compare versions → Document what changed and why
-```
-
-LLMs are sensitive to wording: length, format, factual content, and safety behaviour may change between prompts. Keeping outputs, parameters, rationales, and failure analysis together makes iteration measurable and documented rather than relying on memory or intuition.
+- **12 pre-built benchmark test cases** covering core prompt engineering challenges.
+- **Dual providers** — Google Gemini API for live runs; Deterministic Mock for offline reproducible execution without API keys.
+- **API-key safeguards** — Rejects missing, whitespace-only, or placeholder keys (`your_gemini_api_key_here`) for Gemini; Mock mode is key-free.
+- **Multi-version prompting** — Run V1, V2, V3 side-by-side with rationales and expected failure modes.
+- **Paraphrased question variants** — Select question variants to test prompt robustness against rewording.
+- **Strict schema validation** — JSON syntax, markdown fence bans, required keys, and field types.
+- **Honest evaluation** — Metrics are labelled `[OBJECTIVE]`, `[HEURISTIC]`, `[GROUNDED]`, or `[LLM-JUDGE]`.
+- **Batch evaluation engine** — Multi-case execution, matched-case comparisons, and partial-coverage handling.
+- **Markdown reporting** — Generates and downloads structured evaluation reports from batch results without rerunning providers.
+- **Failure case log** — Structured records with failure type, root cause, and fix tracking.
+- **Experiment persistence** — Runs saved to JSON, exportable to CSV.
+- **No fabricated results** — Every score comes from a real computation or real API response.
 
 ## 📊 Evaluation Methodology
 
@@ -170,126 +197,47 @@ LLMs are sensitive to wording: length, format, factual content, and safety behav
 
 | Type | Method | Limitation |
 |---|---|---|
-| `[OBJECTIVE]` | Directly measured: latency, token count, length | No quality judgement |
-| `[HEURISTIC]` | Regex-based: refusal detection, hallucination risk, format check | Approximate, may false-positive |
-| `[GROUNDED]` | Jaccard word overlap vs. reference answer | Keyword match ≠ semantic match |
-| `[LLM-JUDGE]` | Model scores its own output 1–5 | Non-deterministic, self-evaluation bias |
+| `[OBJECTIVE]` | Directly measured: latency, token count, word count, API success; and deterministic structural checks (`json_schema_valid`, `word_limit_adherence`, `criteria_passed`) | Measures compliance and resource usage, not open-ended literary quality |
+| `[HEURISTIC]` | Rule-based signals: `failure_category`, format adherence, keyword adherence, refusal detection, hallucination risk, safety flags | Approximate diagnostic signals; subject to false positives and negatives |
+| `[GROUNDED]` | Jaccard word-overlap similarity vs. reference answer (`keyword_overlap_score`) | Word overlap is not semantic similarity; requires a reference answer |
+| `[LLM-JUDGE]` | Model scores its own output 1–5 on a specific dimension | Non-deterministic, self-evaluation bias, extra API call |
 
 **What we do NOT do:**
-- Fabricate scores
-- Present heuristics as ground truth
-- Compute a universal "accuracy %" for open-ended generation
-- Pre-populate results
+- Fabricate scores or composite "accuracy %" across heterogeneous tasks.
+- Present heuristics as objective ground truth.
+- Hide or skip failed API calls.
+- Conflate deterministic mock verification with real model performance.
 
-### Why evaluate?
+### Benchmark Test Cases (Schema 1.0)
 
-| Problem | Without evaluation | With evaluation |
-|---|---|---|
-| Format compliance | Assume the format was followed | Check programmatically |
-| Hallucination | Rely only on casual inspection | Flag hedging for review; it is not proof of hallucination |
-| Safety | Assume model defaults are sufficient | Test safety-sensitive cases explicitly |
-| Iteration | Judge changes by feel | Compare actual outputs and measurements |
-| Documentation | Say a prompt was improved | Record the rationale and failure analysis |
+The benchmark dataset in [`test_cases/sample_cases.json`](test_cases/sample_cases.json) contains 12 validated test cases:
 
-### Prompt iteration example
+| ID | Name | Category | Prompt Engineering Challenge |
+|---|---|---|---|
+| A | `ambiguous_summarise` | Ambiguous instruction | Vague verbs ("summarise") produce uncontrolled length and depth |
+| B | `json_output` | Structured JSON output | Unconstrained prompts produce inconsistent field names or markdown fences |
+| C | `grounded_qa` | Context-grounded QA | Model answers from training memory instead of provided context |
+| D | `conflicting_instructions` | Conflicting instructions | Silent tradeoffs when instructions contradict each other |
+| E | `hallucination_resistance` | Hallucination resistance | Confabulating plausible historical accounts for fictional events |
+| F | `safety_sensitive` | Safety-sensitive request | Educational framing vs. hazardous chemical synthesis details |
+| G | `long_context_following` | Long-context following | Multi-task constraint decay in long context passages |
+| H | `prompt_robustness` | Prompt robustness | Surface-level question paraphrasing produces inconsistent formats |
+| I | `missing_information_abstention` | Missing info / abstention | Extrapolating or inventing metrics omitted from context |
+| J | `malformed_input_recovery` | Malformed input handling | Corrupted logs/OCR break schema or cause field hallucination |
+| K | `adversarial_prompt_injection` | Adversarial robustness | Indirect prompt injection embedded inside untrusted user data |
+| L | `strict_schema_edge_case` | Edge case / boundary | Zero items found produces prose ("no items") instead of valid `[]` |
 
-#### Test Case B: Structured JSON Output
+Each test case defines a problem statement, V1 baseline prompt, expected failure mode, V2 improved prompt with rationale, and V3 prompt with rationale. Cases include schema constraints (`expected_root_type`, `required_json_keys`, `field_types`, `allow_markdown_fences`, `allow_empty_array`, `max_words`) where applicable.
 
-**Problem:** Model should return a JSON array, but without a schema, it returns inconsistent output.
-
-
-**Prompt V1 (Baseline):**
-```
-List three popular programming languages as JSON.
-```
-
-**Failure mode this example targets:**
-Output may be wrapped in ` ```json ` markdown fences. Field names can vary between runs
-(`language` vs `name` vs `lang`). Prose may be added before the JSON.
-
-
-**Prompt V2:**
-```
-Return a valid JSON array containing exactly three objects. Each object must have
-exactly these fields: "name" (string), "language" (string), "use_case" (string).
-Do not include any text before or after the JSON.
-```
-
-**Reason for modification:** Provided an explicit schema, field names, and
-output format requirement. Removes format ambiguity.
-
-**Remaining failure mode:** Model may still use markdown fences.
-
-
-**Prompt V3:**
-```
-Return only a raw JSON array with no markdown formatting, no code fences, no
-explanation. The array must contain exactly three objects, each with exactly
-these keys: "name", "language", "use_case".
-Start your response with '[' and end with ']'.
-```
-
-**Reason for modification:** Anchors output start/end characters. Explicitly
-bans markdown. Targets the remaining fence issue; validate the next output to check whether it worked.
-
-> **Prompt Version Files on Disk:** Dedicated `.txt` and `.meta.json` files exist in `prompts/baseline/` (V1) and `prompts/improved/` (V2 and V3) for both `ambiguous_summarise` and `json_output`. Additionally, all eight test cases include complete V1–V3 prompt text, rationales, and failure modes directly inside `test_cases/sample_cases.json`.
-
-### Failure analysis approach
-
-Each failure case is recorded with:
-
-```
-Test Case ID   → which test
-Prompt Version → which version failed
-Failure Type   → from a defined taxonomy (hallucination, format, refusal, etc.)
-Description    → what specifically went wrong
-Root Cause     → why it happened (prompt engineering analysis)
-Fix Applied    → what was changed in the next version
-Fix Worked     → Yes / No / Partially / Unknown
-```
-
-**Taxonomy of failure types:** Instruction non-compliance, Format failure,
-Hallucination/confabulation, Refusal (over-cautious), Refusal (appropriate),
-Safety violation, Inconsistency, Context ignored, Ambiguity exploitation.
-
-### Test cases included
-
-| ID | Category | Prompt Engineering Problem |
-|---|---|---|
-| A | Ambiguous instruction | Vague verbs produce uncontrolled output |
-| B | Structured JSON output | Schema-free JSON is inconsistent |
-| C | Context-grounded QA | Model ignores provided context |
-| D | Conflicting instructions | Silent conflict resolution |
-| E | Hallucination resistance | Confabulation about unknown entities |
-| F | Safety-sensitive request | Framing affects safety compliance |
-| G | Long-context following | Constraints forgotten mid-response |
-| H | Prompt robustness | Paraphrased inputs produce different outputs |
-
-Each test case includes:
-- V1 baseline prompt
-- Documented expected failure mode
-- V2 improved prompt + rationale
-- V3 (where appropriate) + rationale
-
-### Key concepts
-
-1. **Temperature** — controls output randomness. Lower values reduce sampling randomness; even 0.0 does not guarantee identical responses across model or service changes. For evaluation, low temperature is preferred.
-
-2. **Prompt grounding** — explicitly instructing the model to answer from a given context rather than its training data.
-
-3. **Hallucination** — when a model generates plausible-sounding but incorrect information with false confidence.
-
-4. **LLM-as-judge** — using the LLM itself to evaluate outputs. Useful but biased toward self-evaluation.
-
-5. **Jaccard similarity** — `|intersection| / |union|` of two sets. Used here for keyword overlap between response and reference answer. Fast and deterministic but not semantic.
-
-For comprehensive deep dives, see the dedicated guides in [`docs/evaluation_methodology.md`](docs/evaluation_methodology.md) (detailed metric definitions and limitations) and [`docs/failure_analysis.md`](docs/failure_analysis.md) (failure taxonomy, template, and worked examples).
+For comprehensive deep dives, see:
+- [`docs/evaluation_methodology.md`](docs/evaluation_methodology.md) — Detailed metric definitions, denominator rules, and epistemic honesty contract.
+- [`docs/failure_analysis.md`](docs/failure_analysis.md) — Deterministic failure taxonomy, precedence order, and worked case studies.
 
 ## 🚀 Quick Start
 
-Requires **Python 3.10+** and a [Google Gemini API key](https://aistudio.google.com/app/apikey). Download or clone this repository and open a PowerShell terminal in its root directory.
+Requires **Python 3.10+**. A [Google Gemini API key](https://aistudio.google.com/app/apikey) is optional (the lab includes an offline Deterministic Mock Provider for offline testing).
 
-For a fresh checkout, run these five commands. If you already have a `.env`, keep it and skip the copy command.
+Clone the repository and open a terminal in its root directory:
 
 ```powershell
 python -m venv venv
@@ -299,115 +247,105 @@ notepad .env
 .\venv\Scripts\python.exe -m streamlit run app.py
 ```
 
-In the editor, set `GEMINI_API_KEY` to your own key, save, and close it before running the last command. Open [http://localhost:8501](http://localhost:8501).
+In the editor, set `GEMINI_API_KEY` to your key (or leave it unset/placeholder to use the offline Deterministic Mock Provider), save, and run Streamlit. Open [http://localhost:8501](http://localhost:8501).
 
-Using `python.exe -m streamlit` avoids relying on the `streamlit.exe` launcher, which some Windows Application Control policies block. On macOS/Linux, use `venv/bin/python` in place of `.\venv\Scripts\python.exe`, and copy/edit `.env.example` using your platform's tools.
+On macOS/Linux:
+```bash
+python3 -m venv venv
+./venv/bin/python -m pip install -r requirements.txt
+cp .env.example .env
+./venv/bin/python -m streamlit run app.py
+```
 
 ### Environment variables
 
 | Variable | Required | Default | Description |
 |---|---|---|---|
-| `GEMINI_API_KEY` | **Yes** | — | Your Gemini API key |
-| `GEMINI_MODEL` | No | `gemini-flash-latest` | Default for client calls that do not pass a model |
-| `GEMINI_TEMPERATURE` | No | `0.7` | Default for client calls that do not pass a temperature |
-| `GEMINI_MAX_TOKENS` | No | `1024` | Default for client calls that do not pass a token limit |
-
-Dashboard controls pass explicit settings and take precedence over client defaults. Model access and service availability can change; the screenshot run used the existing Flash Lite option.
-
-See [`.env.example`](.env.example) for the template. `.gitignore` excludes the real `.env`, virtual environment, and generated experiment JSON/CSV files. Keep API keys out of source files and commits.
+| `GEMINI_API_KEY` | Optional for Mock; **Yes** for Gemini | — | Your Gemini API key. Placeholder `your_gemini_api_key_here` is safely rejected |
+| `GEMINI_MODEL` | No | `gemini-flash-latest` | Default model for Gemini client calls |
+| `GEMINI_TEMPERATURE` | No | `0.7` | Default temperature for client calls |
+| `GEMINI_MAX_TOKENS` | No | `1024` | Default token limit for client calls |
 
 ## 🧪 Running Tests
 
 From the repository root:
 
 ```powershell
-.\venv\Scripts\pytest tests/ -v
+.\venv\Scripts\pytest -v
 ```
 
-**Expected: `117 passed`.** Verified during this documentation update. The automated suite uses mocks, makes no real Gemini API calls, and can run without an API key.
+**Expected: `229 passed`.** All 229 automated tests execute completely offline using mock providers, make zero live API calls, and run without API credentials:
 
-For focused runs, use `tests/test_evaluator.py`, `tests/test_prompt_manager.py`, or `tests/test_llm_client.py` in place of `tests/`. With `pytest-cov` installed, add `--cov=src --cov-report=term-missing`.
-
-`tests/test_api_connection.py` is a separate manual connection check: running that file directly makes a real API call, but pytest does not execute its guarded entry point.
+- `tests/test_app_workbench.py` (21 tests) — Provider selection, safeguards, dataset loading, prompt rendering, evaluation display, batch display rows, report caching, and headless `AppTest` execution.
+- `tests/test_integration.py` (4 tests) — End-to-end offline workflows: pipeline persistence, failure propagation, partial versions, and file coexistence.
+- `tests/test_batch_runner.py` (27 tests) — Batch execution, metric aggregation, matched-case comparisons, CommonMark report formatting, and disk saving.
+- `tests/test_evaluator.py` (72 tests) — Heuristic metrics, strict JSON validation, word limits, failure taxonomy precedence, and LLM judge.
+- `tests/test_llm_client.py` (30 tests) — Provider abstraction, mock provider repeatability, and error classification.
+- `tests/test_utils.py` (47 tests) — Schema 1.0 dataset validation, prompt rendering, experiment persistence, and CSV export.
+- `tests/test_prompt_manager.py` (27 tests) — Prompt version CRUD, metadata validation, and inline registry.
+- `tests/test_api_connection.py` (1 test) — Guarded connection smoke-test (mocked under pytest; live network call only executed when run directly as a script).
 
 ## 📁 Project Structure
 
 ```text
 GenAI-Prompt-Evaluation-Lab/
-├── app.py                         # Streamlit dashboard: six pages
-├── README.md                      # Visual portfolio and setup
-├── QUICKSTART.md                  # Existing command reference
+├── app.py                         # Streamlit workbench: seven pages
+├── README.md                      # Project documentation and visual portfolio
+├── QUICKSTART.md                  # Quickstart command reference
 ├── requirements.txt               # Application and test dependencies
 ├── .env.example                   # Environment variable template
-├── .gitignore                     # Excludes secrets, venv and generated data
+├── .gitignore                     # Excludes secrets, venv, and generated data
 ├── src/
-│   ├── llm_client.py              # Gemini wrapper and structured API results
-│   ├── evaluator.py               # Labelled metrics and optional LLM judge
-│   ├── prompt_manager.py          # Prompt file CRUD and InlineRegistry
-│   └── utils.py                   # JSON persistence, CSV export and helpers
+│   ├── batch_runner.py            # Batch evaluation runner, aggregations, and Markdown reports
+│   ├── evaluator.py               # Evaluation pipeline, strict validation, and failure taxonomy
+│   ├── llm_client.py              # BaseLLMProvider, GeminiClient, DeterministicMockProvider
+│   ├── prompt_manager.py          # Prompt file CRUD and InlinePromptRegistry
+│   └── utils.py                   # Dataset validation (Schema 1.0), prompt rendering, and persistence
 ├── prompts/
-│   ├── baseline/                  # V1 prompts (ambiguous_summarise, json_output) + metadata
-│   └── improved/                  # V2/V3 prompts (ambiguous_summarise, json_output) + metadata
+│   ├── baseline/                  # V1 prompt text files and metadata
+│   └── improved/                  # V2 and V3 prompt text files and metadata
 ├── test_cases/
-│   └── sample_cases.json          # Eight preset cases with prompt versions
+│   └── sample_cases.json          # 12 validated benchmark test cases (Schema 1.0)
 ├── experiments/
-│   ├── README.md                  # Explains generated result storage
-│   └── *.json / *.csv             # Local experiment data; git-ignored
+│   ├── README.md                  # Result storage documentation
+│   └── *.json / *.csv             # Saved experiment records and failure cases (git-ignored)
 ├── tests/
-│   ├── test_evaluator.py          # Objective, heuristic and judge tests
+│   ├── test_app_workbench.py      # Streamlit workbench regression and headless AppTest tests
+│   ├── test_batch_runner.py       # Batch runner, aggregation, and Markdown reporting tests
+│   ├── test_evaluator.py          # Objective, heuristic, schema validation, and failure tests
+│   ├── test_integration.py        # End-to-end offline integration tests
+│   ├── test_llm_client.py         # Mocked Gemini client and DeterministicMockProvider tests
 │   ├── test_prompt_manager.py     # Prompt persistence and validation tests
-│   ├── test_llm_client.py         # Mocked API success/error tests
-│   └── test_api_connection.py     # Manual API connection check
+│   ├── test_utils.py              # Dataset validation, prompt rendering, and persistence tests
+│   └── test_api_connection.py     # Guarded manual live API check
 └── docs/
-    ├── evaluation_methodology.md  # Detailed metric breakdown and honesty contract
-    ├── failure_analysis.md        # Failure taxonomy and worked case studies
-    └── screenshots/
-        ├── 01_hero.png
-        ├── 02_run_experiment.png
-        ├── 03_custom_prompt.png
-        ├── 04_results_sidebyside.png
-        ├── 05_comparison_table.png
-        ├── 06_evaluate.png
-        ├── 07_failure_log.png
-        ├── 08_history.png
-        └── 09_compare_outputs.png
+    ├── evaluation_methodology.md  # Detailed metric breakdown, denominator rules, and limitations
+    ├── failure_analysis.md        # Deterministic failure taxonomy, precedence order, and examples
+    └── screenshots/               # Application screenshots
 ```
 
 ## ⚠️ Limitations
 
-1. **Heuristic evaluation is approximate.** Keyword matching, refusal detection, and hallucination risk scoring are rules-based and will produce false positives and negatives.
-
-2. **LLM-as-judge is non-deterministic.** The same response may receive different scores on repeated evaluations.
-
-3. **No semantic similarity measurement.** Keyword overlap (Jaccard) is not a semantic metric. Two correct paraphrases of the same answer may score low.
-
-4. **Reproducibility.** LLM outputs with temperature > 0 are not deterministic. Results will vary between runs.
-
-5. **Free-tier rate limits.** The Gemini free tier has request-per-minute limits. If you run many experiments quickly, you may hit them.
-
-6. **No human evaluation.** The project does not include a human evaluation protocol, which is ultimately necessary for reliable quality assessment.
-
-7. **Test cases use one context variant.** The robustness test (H) includes multiple question variants in the JSON but currently runs only the first variant automatically.
-
-8. **Custom Prompt persistence.** Custom runs remain in session memory and are not automatically saved to History or connected to Evaluate.
-
-9. **Efficiency is not correctness.** Word count, token usage, latency, and `STOP` do not establish answer quality. No billing estimate or repeated-run performance benchmark is included.
-
-10. **Model availability changes.** An API key may load successfully even when a selected model is unavailable or overloaded. The screenshots record one successful fallback configuration, not guaranteed access to every model in the dropdown.
+1. **Deterministic mock results do not measure real model capability.** Mock mode validates pipeline mechanics, schema rules, and aggregation denominators offline; evaluating actual model quality requires a live LLM provider.
+2. **Heuristic evaluation is approximate.** Keyword matching, refusal detection, and hedging patterns are rule-based approximations that produce false positives and false negatives.
+3. **No semantic similarity measurement.** Keyword overlap (Jaccard) measures word-set overlap against a reference answer, not semantic meaning. Paraphrases may score low.
+4. **LLM-as-judge is non-deterministic.** Repeated evaluations of the same response can yield different scores, and models exhibit self-evaluation bias.
+5. **Reproducibility with live LLMs.** At temperature > 0, outputs vary across runs. Even at temperature 0.0, provider backend updates can alter responses.
+6. **Free-tier rate limits.** The Gemini free tier imposes request-per-minute quotas. Batch runs against live APIs should use conservative pacing.
+7. **No automated human evaluation.** Algorithmic and heuristic checks do not replace human review for real-world production deployment.
 
 ## 🔮 Future Improvements
 
-- [ ] Semantic similarity using sentence embeddings (e.g., `sentence-transformers`)
-- [ ] Multiple model comparison (GPT-4o, Claude, Gemini) in one run
-- [ ] Automatic generation of robustness test variants
-- [ ] Human evaluation interface (thumbs up/down per response)
-- [ ] Statistical significance testing across repeated runs
-- [ ] Prompt template library with tagging and search
-- [ ] Export to a standard evaluation format (e.g., HELM-compatible)
+- [ ] Semantic similarity metrics using sentence embeddings (e.g. `sentence-transformers`).
+- [ ] Multi-provider live support (Anthropic Claude, OpenAI GPT-4o) via `BaseLLMProvider`.
+- [ ] Automated generation of paraphrased robustness variants.
+- [ ] Human evaluation interface (thumbs up/down and rubric scoring per response).
+- [ ] Statistical confidence intervals across repeated sampling runs.
+- [ ] Export to standard evaluation formats (e.g. HELM / AlpacaEval).
 
 ### Contributing
 
-This is a portfolio project. If you find a bug or want to suggest an improvement, feel free to open an issue.
+This is a portfolio project. If you find a bug or want to suggest an improvement, feel free to open an issue or pull request.
 
 ### License
 

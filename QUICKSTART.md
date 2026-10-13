@@ -12,7 +12,7 @@ Welcome! If you are new to Python, virtual environments, or Streamlit, this guid
 | **2. Test API Connection** | `python tests\test_api_connection.py` | Checks if your Gemini API key is working |
 | **3. Launch Web App** | `python -m streamlit run app.py` | Starts the interactive web dashboard |
 | **4. Open App in Browser** | Open **[http://localhost:8501](http://localhost:8501)** | View and play with the app |
-| **5. Run All Tests** | `pytest` | Runs all 117 automated unit tests |
+| **5. Run All Tests** | `pytest` | Runs all 229 automated unit and regression tests |
 | **6. Stop the Web App** | Press `Ctrl + C` in the terminal | Shuts down the local web server |
 | **7. Exit Environment** | `deactivate` | Exits the `(venv)` environment |
 
@@ -42,9 +42,9 @@ Welcome! If you are new to Python, virtual environments, or Streamlit, this guid
 
 ---
 
-### Step 2: Verify Your Gemini API Key
+### Step 2: Verify Your Gemini API Key (Optional for Offline Mock)
 
-Before running the web app, make sure your Gemini API key in `.env` is working properly:
+If you plan to use Google Gemini live models, make sure your Gemini API key in `.env` is working properly:
 
 ```powershell
 python tests\test_api_connection.py
@@ -59,7 +59,10 @@ Sending test prompt...
 Success:     True
 Response:    'API connection successful.'
 ```
-If you see `Success: True`, you are ready to go!
+If you see `Success: True`, you are ready to make live calls!
+
+> [!NOTE]
+> If you do not have an API key yet, you can skip this step. The app includes a **Deterministic Mock** provider that runs 100% offline without any API key or network connection.
 
 ---
 
@@ -82,12 +85,14 @@ python -m streamlit run app.py
 Open your web browser (Chrome, Edge, etc.) and go to:
 👉 **[http://localhost:8501](http://localhost:8501)**
 
-Inside the app, you will find 5 sections on the left sidebar:
-1. **🚀 Run Experiment** — Choose a pre-built test case (like JSON formatting or summarization) and click **Run All Versions** to see Gemini generate responses for V1, V2, and V3 prompts.
-2. **📊 Compare** — View the different prompt outputs side-by-side with latency and token usage.
-3. **🔍 Evaluate** — See automated quality checks (word counts, format verification, refusal detection, hallucination risk).
-4. **⚠️ Failure Log** — Browse or document failure modes (why a prompt didn't work and how it was fixed).
-5. **📋 History** — View all past runs or download them as a CSV.
+Inside the app, you will find 7 sections on the left sidebar:
+1. **🚀 Run Experiment** — Choose from 12 benchmark test cases (like JSON formatting or summarization) or custom inputs, select Gemini or Deterministic Mock, and click **Run All Versions** to see generated responses for V1, V2, and V3 prompts.
+2. **✏️ Custom Prompt** — Write and test ad-hoc prompt variations against any test case.
+3. **📊 Compare Outputs** — View different prompt outputs side-by-side with latency and token usage.
+4. **🔍 Evaluate** — Run automated quality checks (JSON validation, word limits, refusal detection, grounded overlap).
+5. **📦 Batch Evaluation** — Run all prompt versions across benchmark test cases, view aggregate metrics, and download Markdown/CSV reports.
+6. **⚠️ Failure Log** — Browse and document failure modes categorized by a 12-category taxonomy.
+7. **📋 Experiment History** — View all past runs or download them as a CSV.
 
 ---
 
@@ -101,10 +106,15 @@ pytest
 
 **Expected output:**
 ```text
+tests\test_api_connection.py .
+tests\test_app_workbench.py .....................
+tests\test_batch_runner.py ................................
 tests\test_evaluator.py ................................................
-tests\test_llm_client.py ......................
+tests\test_integration.py ....
+tests\test_llm_client.py ................................
 tests\test_prompt_manager.py .......................................
-============================= 117 passed in 0.63s =============================
+tests\test_utils.py ......................................
+============================= 229 passed in 5.01s =============================
 ```
 
 To see each test name as it passes, add `-v`:
@@ -129,9 +139,12 @@ pytest -v
 #### "Port 8501 is already in use"
 If Streamlit says port 8501 is already occupied, it will automatically switch to `http://localhost:8502`. Check the URL printed in your terminal.
 
-#### "GEMINI_API_KEY is not set"
+#### "GEMINI_API_KEY is not set" or "API key contains placeholder"
 Make sure you have a file named `.env` in the root folder with:
 ```env
 GEMINI_API_KEY="your-actual-api-key-here"
 ```
 Get a free API key at [https://aistudio.google.com/app/apikey](https://aistudio.google.com/app/apikey).
+
+> [!TIP]
+> **No API key?** You can switch the LLM Provider in the sidebar to **Deterministic Mock (offline)** to run benchmark experiments, comparisons, evaluations, and batch reports completely offline!
