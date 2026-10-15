@@ -1,0 +1,1 @@
+Stop vibe-checking your prompts. The GenAI Prompt Evaluation Lab brings deterministic contract validation, 12-category failure taxonomy, and 229 passing CI tests to prompt engineering.

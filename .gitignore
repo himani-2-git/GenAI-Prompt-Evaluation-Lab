@@ -51,3 +51,10 @@ experiments/*.csv
 *.log
 logs/
 output/
+
+# ─── Video & Agent Skills Tooling ─────────────────────────────────────────────
+.agents/
+skills-lock.json
+brag-output/composition/
+brag-output/work/
+brag-output/.hyperframes/
